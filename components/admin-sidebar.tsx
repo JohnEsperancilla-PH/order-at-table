@@ -16,7 +16,8 @@ import {
   LayoutDashboard,
   Utensils,
   Table as TableIcon,
-  ShoppingBag,
+  Tags,
+  Wallet,
 } from 'lucide-react'
 
 const menuItems = [
@@ -34,6 +35,16 @@ const menuItems = [
     title: 'Menu',
     url: '/admin/menu',
     icon: Utensils,
+  },
+  {
+    title: 'Categories',
+    url: '/admin/categories',
+    icon: Tags,
+  },
+  {
+    title: 'Profits',
+    url: '/admin/profits',
+    icon: Wallet,
   },
 ]
 

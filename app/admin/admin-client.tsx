@@ -6,17 +6,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Search, CheckCircle2, XCircle, Clock, Package, Eye, RefreshCw } from 'lucide-react'
-import { verifyOrderByCode, updateOrderStatus, getAllOrders, getOrdersByStatus } from '@/lib/actions/orders'
+import { updateOrderStatus, getAllOrders, getOrdersByStatus } from '@/lib/actions/orders'
 import { Order, OrderStatus } from '@/lib/types'
 import { format } from 'date-fns'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import { formatCurrency } from '@/lib/utils'
 
 interface AdminDashboardClientProps {
   initialOrders: any[]
@@ -26,18 +26,17 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
   const [orders, setOrders] = useState(initialOrders)
   const [searchCode, setSearchCode] = useState('')
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
-  const [isVerifying, setIsVerifying] = useState(false)
   const [verifyError, setVerifyError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('all')
   const [isLoading, setIsLoading] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [searchResultId, setSearchResultId] = useState<string | null>(null)
 
   const loadOrders = async (status?: string, silent = false) => {
+    setIsRefreshing(true)
     if (!silent) {
       setIsLoading(true)
-    } else {
-      setIsRefreshing(true)
     }
     try {
       const data = status && status !== 'all'
@@ -78,24 +77,16 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
     return () => clearInterval(interval)
   }, [autoRefresh, activeTab])
 
-  const handleVerifyCode = async () => {
-    if (!searchCode.trim()) return
+  const handleVerifyCode = () => {
+    const query = searchCode.trim().toUpperCase()
+    if (!query) return
 
-    setIsVerifying(true)
-    setVerifyError(null)
+    const hasMatch = filteredOrders.some(order =>
+      order.confirmation_code?.toUpperCase().includes(query)
+    )
 
-    try {
-      const order = await verifyOrderByCode(searchCode.toUpperCase())
-      if (order) {
-        setSelectedOrder(order)
-      } else {
-        setVerifyError('Order not found')
-      }
-    } catch (error: any) {
-      setVerifyError(error.message || 'Failed to verify order')
-    } finally {
-      setIsVerifying(false)
-    }
+    setVerifyError(hasMatch ? null : 'Order not found')
+    setSearchResultId(hasMatch ? query : null)
   }
 
   const handleUpdateStatus = async (orderId: string, status: OrderStatus) => {
@@ -142,6 +133,16 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
     return order.status === activeTab
   })
 
+  const searchQuery = searchCode.trim().toUpperCase()
+  const displayedOrders = searchQuery
+    ? filteredOrders.filter(order =>
+        order.confirmation_code?.toUpperCase().includes(searchQuery)
+      )
+    : filteredOrders
+
+  const awaitingCount = orders.filter(o => o.status === 'awaiting_cashier_confirmation').length
+  const pendingCount = orders.filter(o => o.status === 'pending').length
+
   return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -174,53 +175,83 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
           </div>
         </div>
 
-        {/* Verify Code Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Verify Order by Code</CardTitle>
-            <CardDescription>
-              Enter a confirmation code to view and manage an order
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-2">
-              <Input
-                placeholder="Enter confirmation code"
-                value={searchCode}
-                onChange={e => setSearchCode(e.target.value.toUpperCase())}
-                onKeyDown={e => e.key === 'Enter' && handleVerifyCode()}
-                className="flex-1"
-              />
-              <Button
-                onClick={handleVerifyCode}
-                disabled={isVerifying || !searchCode.trim()}
-              >
-                <Search className="w-4 h-4 mr-2" />
-                {isVerifying ? 'Verifying...' : 'Verify'}
-              </Button>
-            </div>
-            {verifyError && (
-              <Alert variant="destructive" className="mt-4">
-                <AlertDescription>{verifyError}</AlertDescription>
-              </Alert>
-            )}
-          </CardContent>
-        </Card>
-
       {/* Orders Table */}
       <Card>
-          <CardHeader>
-            <CardTitle>Orders</CardTitle>
-            <CardDescription>
-              View and manage all orders
-            </CardDescription>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>Orders</CardTitle>
+              <CardDescription>
+                View and manage all orders
+              </CardDescription>
+            </div>
+            <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:items-center">
+              <div className="flex w-full items-center gap-2 sm:w-auto">
+                <Label htmlFor="confirmation-code" className="sr-only">
+                  Confirmation Code
+                </Label>
+                <Input
+                  id="confirmation-code"
+                  placeholder="Search code"
+                  value={searchCode}
+                  onChange={e => {
+                    setSearchCode(e.target.value.toUpperCase())
+                    if (verifyError) setVerifyError(null)
+                    if (!e.target.value.trim()) setSearchResultId(null)
+                  }}
+                  onKeyDown={e => e.key === 'Enter' && handleVerifyCode()}
+                  className="w-full md:w-56"
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleVerifyCode}
+                  disabled={!searchCode.trim()}
+                >
+                  <Search className="w-4 h-4 mr-2" />
+                  Search
+                </Button>
+                {searchResultId && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSearchResultId(null)
+                      setSearchCode('')
+                      setVerifyError(null)
+                    }}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+              {verifyError && (
+                <Alert variant="destructive" className="sm:ml-2">
+                  <AlertDescription>{verifyError}</AlertDescription>
+                </Alert>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="grid w-full grid-cols-6">
                 <TabsTrigger value="all">All</TabsTrigger>
+                <TabsTrigger value="pending">
+                  Pending
+                  {pendingCount > 0 && (
+                    <Badge variant="secondary" className="ml-2">
+                      {pendingCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
                 <TabsTrigger value="awaiting_cashier_confirmation">
                   Awaiting
+                  {awaitingCount > 0 && (
+                    <Badge variant="secondary" className="ml-2">
+                      {awaitingCount}
+                    </Badge>
+                  )}
                 </TabsTrigger>
                 <TabsTrigger value="confirmed">Confirmed</TabsTrigger>
                 <TabsTrigger value="completed">Completed</TabsTrigger>
@@ -232,41 +263,50 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
                   <div className="text-center py-8 text-muted-foreground">
                     Loading orders...
                   </div>
-                ) : filteredOrders.length === 0 ? (
+                ) : displayedOrders.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    No orders found
+                    {searchResultId ? 'No matching order found' : 'No orders found'}
                   </div>
                 ) : (
                   <ScrollArea className="h-[600px]">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Code</TableHead>
-                          <TableHead>Table</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Total</TableHead>
-                          <TableHead>Created</TableHead>
-                          <TableHead>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredOrders.map((order: any) => (
-                          <TableRow key={order.id}>
-                            <TableCell className="font-mono font-bold">
-                              {order.confirmation_code}
-                            </TableCell>
-                            <TableCell>
-                              {order.tables?.table_number || 'N/A'}
-                            </TableCell>
-                            <TableCell>{getStatusBadge(order.status)}</TableCell>
-                            <TableCell>${order.total_amount.toFixed(2)}</TableCell>
-                            <TableCell>
-                              {format(new Date(order.created_at), 'MMM d, HH:mm')}
-                            </TableCell>
-                            <TableCell>
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                      {displayedOrders.map((order: any) => (
+                        <Card key={order.id} className="overflow-hidden border border-border/80 shadow-sm">
+                          <CardContent className="space-y-4 p-4 sm:p-5">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-xs uppercase tracking-wide text-muted-foreground">Code</p>
+                                <p className="font-mono text-xl font-semibold">
+                                  {order.confirmation_code}
+                                </p>
+                              </div>
+                              {getStatusBadge(order.status)}
+                            </div>
+                            <div className="flex items-center justify-between text-sm text-muted-foreground">
+                              <span>Table {order.tables?.table_number || 'N/A'}</span>
+                              <span>{format(new Date(order.created_at), 'MMM d, HH:mm')}</span>
+                            </div>
+                            <div className="rounded-md bg-muted/40 px-3 py-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Total</span>
+                                <span className="text-lg font-semibold">
+                                  {formatCurrency(order.total_amount)}
+                                </span>
+                              </div>
+                            </div>
+                            <div
+                              className={`grid gap-2 ${
+                                order.status === 'awaiting_cashier_confirmation'
+                                  ? '[grid-template-columns:80px_1fr_1fr]'
+                                  : order.status === 'confirmed'
+                                    ? '[grid-template-columns:80px_1fr]'
+                                    : '[grid-template-columns:80px]'
+                              }`}
+                            >
                               <Button
                                 size="sm"
                                 variant="outline"
+                                className="w-full"
                                 onClick={() => {
                                   const found = orders.find((o: any) => o.id === order.id)
                                   setSelectedOrder(found || order)
@@ -275,11 +315,42 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
                                 <Eye className="w-4 h-4 mr-1" />
                                 View
                               </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                              {order.status === 'awaiting_cashier_confirmation' && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    className="w-full"
+                                    onClick={() => handleUpdateStatus(order.id, 'confirmed')}
+                                  >
+                                    <CheckCircle2 className="w-4 h-4 mr-1" />
+                                    Confirm
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    className="w-full"
+                                    onClick={() => handleUpdateStatus(order.id, 'cancelled')}
+                                  >
+                                    <XCircle className="w-4 h-4 mr-1" />
+                                    Cancel
+                                  </Button>
+                                </>
+                              )}
+                              {order.status === 'confirmed' && (
+                                <Button
+                                  size="sm"
+                                  className="w-full"
+                                  onClick={() => handleUpdateStatus(order.id, 'completed')}
+                                >
+                                  <CheckCircle2 className="w-4 h-4 mr-1" />
+                                  Complete
+                                </Button>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
                   </ScrollArea>
                 )}
               </TabsContent>
@@ -346,11 +417,11 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
                           {item.menu_items?.name || 'Unknown Item'}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          Qty: {item.quantity} × ${item.price.toFixed(2)}
+                          Qty: {item.quantity} × {formatCurrency(item.price)}
                         </p>
                       </div>
                       <p className="font-medium">
-                        ${(item.quantity * item.price).toFixed(2)}
+                        {formatCurrency(item.quantity * item.price)}
                       </p>
                     </div>
                   ))}
@@ -362,57 +433,23 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span>Subtotal</span>
-                  <span>${selectedOrder.subtotal.toFixed(2)}</span>
+                  <span>{formatCurrency(selectedOrder.subtotal)}</span>
                 </div>
                 {selectedOrder.discount_amount > 0 && (
                   <div className="flex justify-between text-green-600">
                     <span>Discount</span>
-                    <span>-${selectedOrder.discount_amount.toFixed(2)}</span>
+                    <span>-{formatCurrency(selectedOrder.discount_amount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold text-lg">
                   <span>Total</span>
-                  <span>${selectedOrder.total_amount.toFixed(2)}</span>
+                  <span>{formatCurrency(selectedOrder.total_amount)}</span>
                 </div>
               </div>
 
               <Separator />
 
               <div className="flex gap-2">
-                {selectedOrder.status === 'awaiting_cashier_confirmation' && (
-                  <>
-                    <Button
-                      onClick={() =>
-                        handleUpdateStatus(selectedOrder.id, 'confirmed')
-                      }
-                      className="flex-1"
-                    >
-                      <CheckCircle2 className="w-4 h-4 mr-2" />
-                      Confirm Payment
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      onClick={() =>
-                        handleUpdateStatus(selectedOrder.id, 'cancelled')
-                      }
-                      className="flex-1"
-                    >
-                      <XCircle className="w-4 h-4 mr-2" />
-                      Cancel
-                    </Button>
-                  </>
-                )}
-                {selectedOrder.status === 'confirmed' && (
-                  <Button
-                    onClick={() =>
-                      handleUpdateStatus(selectedOrder.id, 'completed')
-                    }
-                    className="flex-1"
-                  >
-                    <CheckCircle2 className="w-4 h-4 mr-2" />
-                    Mark as Completed
-                  </Button>
-                )}
                 <Button
                   variant="outline"
                   onClick={() => setSelectedOrder(null)}

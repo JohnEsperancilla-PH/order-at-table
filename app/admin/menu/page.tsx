@@ -6,8 +6,8 @@ export default async function MenuManagementPage() {
   const restaurantId = '00000000-0000-0000-0000-000000000001'
   
   const [categories, menuItems] = await Promise.all([
-    getMenuCategories(restaurantId),
-    getMenuItems(restaurantId),
+    getMenuCategories(restaurantId, true),
+    getMenuItems(restaurantId, true),
   ])
 
   return <MenuManagementClient categories={categories} menuItems={menuItems} />

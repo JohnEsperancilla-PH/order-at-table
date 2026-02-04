@@ -33,24 +33,29 @@ export async function getTableByNumber(tableNumber: string, restaurantId?: strin
     query = query.eq('restaurant_id', restaurantId)
   }
 
-  const { data, error } = await query.single()
+  const { data, error } = await query.limit(1).maybeSingle()
 
-  if (error) {
-    throw new Error(`Table not found: ${error.message}`)
+  if (error || !data) {
+    throw new Error(`Table not found: ${error?.message || 'No active table found'}`)
   }
 
   return data
 }
 
-export async function getMenuItems(restaurantId: string) {
+export async function getMenuItems(restaurantId: string, includeUnavailable = false) {
   const supabase = await createClient()
   
-  const { data, error } = await supabase
+  let query = supabase
     .from('menu_items')
     .select('*, menu_categories(*)')
     .eq('restaurant_id', restaurantId)
-    .eq('is_available', true)
     .order('display_order', { ascending: true })
+
+  if (!includeUnavailable) {
+    query = query.eq('is_available', true)
+  }
+
+  const { data, error } = await query
 
   if (error) {
     throw new Error(`Failed to fetch menu: ${error.message}`)
@@ -59,15 +64,20 @@ export async function getMenuItems(restaurantId: string) {
   return data || []
 }
 
-export async function getMenuCategories(restaurantId: string) {
+export async function getMenuCategories(restaurantId: string, includeInactive = false) {
   const supabase = await createClient()
-  
-  const { data, error } = await supabase
+
+  let query = supabase
     .from('menu_categories')
     .select('*')
     .eq('restaurant_id', restaurantId)
-    .eq('is_active', true)
     .order('display_order', { ascending: true })
+
+  if (!includeInactive) {
+    query = query.eq('is_active', true)
+  }
+
+  const { data, error } = await query
 
   if (error) {
     throw new Error(`Failed to fetch categories: ${error.message}`)
@@ -101,6 +111,34 @@ export async function getActiveOrder(tableId: string) {
   return data || null
 }
 
+export async function getOrderById(orderId: string, tableNumber?: string) {
+  const supabase = await createClient()
+
+  let query = supabase
+    .from('orders')
+    .select(`
+      *,
+      tables!inner (*),
+      order_items (
+        *,
+        menu_items (*)
+      )
+    `)
+    .eq('id', orderId)
+
+  if (tableNumber) {
+    query = query.eq('tables.table_number', tableNumber)
+  }
+
+  const { data, error } = await query.single()
+
+  if (error) {
+    throw new Error(`Failed to fetch order: ${error.message}`)
+  }
+
+  return data
+}
+
 export async function createOrder(
   tableId: string,
   restaurantId: string,
@@ -117,6 +155,27 @@ export async function createOrder(
 
   // Calculate subtotal
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+
+  // Validate item availability to prevent ordering unavailable items
+  const itemIds = items.map(item => item.menu_item_id)
+  const { data: menuItems, error: itemsError } = await supabase
+    .from('menu_items')
+    .select('id, name, is_available')
+    .in('id', itemIds)
+
+  if (itemsError) {
+    throw new Error(`Failed to validate items: ${itemsError.message}`)
+  }
+
+  if (!menuItems || menuItems.length !== itemIds.length) {
+    throw new Error('Some items are no longer available')
+  }
+
+  const unavailableItems = menuItems.filter(item => !item.is_available)
+  if (unavailableItems.length > 0) {
+    const names = unavailableItems.map(item => item.name).join(', ')
+    throw new Error(`Unavailable items: ${names}`)
+  }
 
   // Apply discount if provided
   let discountAmount = 0
@@ -233,14 +292,14 @@ export async function createOrder(
     price: item.price,
   }))
 
-  const { error: itemsError } = await supabase
+  const { error: orderItemsError } = await supabase
     .from('order_items')
     .insert(orderItems)
 
-  if (itemsError) {
+  if (orderItemsError) {
     // Rollback order creation
     await supabase.from('orders').delete().eq('id', order.id)
-    throw new Error(`Failed to create order items: ${itemsError.message}`)
+    throw new Error(`Failed to create order items: ${orderItemsError.message}`)
   }
 
   // Create order discount record if applicable
@@ -263,6 +322,7 @@ export async function createOrder(
   
   if (tableData) {
     revalidatePath(`/table/${tableData.table_number}/order`)
+    revalidatePath(`/table/${tableData.table_number}/orders/${order.id}/${order.status}`)
   }
   revalidatePath('/admin')
   return order

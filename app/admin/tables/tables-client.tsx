@@ -7,14 +7,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -124,9 +116,18 @@ export function TablesManagementClient({
     return `${baseUrl}/table/${tableNumber}/order`
   }
 
+  const handleCopyLink = async (tableNumber: string) => {
+    const url = generateQRUrl(tableNumber)
+    try {
+      await navigator.clipboard.writeText(url)
+    } catch (copyError) {
+      console.error('Failed to copy link:', copyError)
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold">Table Management</h1>
           <p className="text-muted-foreground">
@@ -158,60 +159,58 @@ export function TablesManagementClient({
               No tables found. Create your first table.
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Table Number</TableHead>
-                  <TableHead>Capacity</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Order URL</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tables.map((table) => (
-                  <TableRow key={table.id}>
-                    <TableCell className="font-medium">
-                      {table.table_number}
-                    </TableCell>
-                    <TableCell>{table.capacity || 'N/A'}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={table.is_active ? 'default' : 'secondary'}
-                      >
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+              {tables.map((table) => (
+                <Card key={table.id} className="overflow-hidden">
+                  <CardContent className="flex min-h-[160px] flex-col gap-3 p-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Table</p>
+                        <p className="text-2xl font-semibold">{table.table_number}</p>
+                      </div>
+                      <Badge variant={table.is_active ? 'default' : 'secondary'}>
                         {table.is_active ? 'Active' : 'Inactive'}
                       </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <code className="text-xs bg-muted px-2 py-1 rounded">
-                        /table/{table.table_number}/order
-                      </code>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleOpenEditDialog(table)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => {
-                            setDeleteTableId(table.id)
-                            setIsDeleteDialogOpen(true)
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Capacity: {table.capacity || 'N/A'}
+                    </div>
+                    <Badge variant="outline" className="w-fit font-mono text-xs">
+                      /table/{table.table_number}/order
+                    </Badge>
+                    <div className="mt-auto flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleCopyLink(table.table_number)}
+                      >
+                        <QrCode className="mr-2 h-4 w-4" />
+                        Copy Link
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        aria-label={`Edit table ${table.table_number}`}
+                        onClick={() => handleOpenEditDialog(table)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        aria-label={`Delete table ${table.table_number}`}
+                        onClick={() => {
+                          setDeleteTableId(table.id)
+                          setIsDeleteDialogOpen(true)
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
@@ -261,6 +260,7 @@ export function TablesManagementClient({
                 variant="outline"
                 onClick={() => setIsDialogOpen(false)}
                 className="flex-1"
+                disabled={isSubmitting}
               >
                 Cancel
               </Button>

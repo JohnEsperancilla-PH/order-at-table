@@ -14,7 +14,7 @@ export default async function OrderPage({
     const table = await getTableByNumber(tableNumber)
     const [categories, menuItems, activeOrder] = await Promise.all([
       getMenuCategories(table.restaurant_id),
-      getMenuItems(table.restaurant_id),
+      getMenuItems(table.restaurant_id, true),
       getActiveOrder(table.id),
     ])
 
