@@ -1,0 +1,382 @@
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
+
+export async function getTable(tableId: string) {
+  const supabase = await createClient()
+  
+  const { data, error } = await supabase
+    .from('tables')
+    .select('*, restaurants(*)')
+    .eq('id', tableId)
+    .eq('is_active', true)
+    .single()
+
+  if (error) {
+    throw new Error(`Table not found: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function getTableByNumber(tableNumber: string, restaurantId?: string) {
+  const supabase = await createClient()
+  
+  let query = supabase
+    .from('tables')
+    .select('*, restaurants(*)')
+    .eq('table_number', tableNumber)
+    .eq('is_active', true)
+
+  if (restaurantId) {
+    query = query.eq('restaurant_id', restaurantId)
+  }
+
+  const { data, error } = await query.single()
+
+  if (error) {
+    throw new Error(`Table not found: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function getMenuItems(restaurantId: string) {
+  const supabase = await createClient()
+  
+  const { data, error } = await supabase
+    .from('menu_items')
+    .select('*, menu_categories(*)')
+    .eq('restaurant_id', restaurantId)
+    .eq('is_available', true)
+    .order('display_order', { ascending: true })
+
+  if (error) {
+    throw new Error(`Failed to fetch menu: ${error.message}`)
+  }
+
+  return data || []
+}
+
+export async function getMenuCategories(restaurantId: string) {
+  const supabase = await createClient()
+  
+  const { data, error } = await supabase
+    .from('menu_categories')
+    .select('*')
+    .eq('restaurant_id', restaurantId)
+    .eq('is_active', true)
+    .order('display_order', { ascending: true })
+
+  if (error) {
+    throw new Error(`Failed to fetch categories: ${error.message}`)
+  }
+
+  return data || []
+}
+
+export async function getActiveOrder(tableId: string) {
+  const supabase = await createClient()
+  
+  const { data, error } = await supabase
+    .from('orders')
+    .select(`
+      *,
+      order_items (
+        *,
+        menu_items (*)
+      )
+    `)
+    .eq('table_id', tableId)
+    .in('status', ['pending', 'awaiting_cashier_confirmation', 'confirmed'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
+
+  if (error && error.code !== 'PGRST116') {
+    throw new Error(`Failed to fetch order: ${error.message}`)
+  }
+
+  return data || null
+}
+
+export async function createOrder(
+  tableId: string,
+  restaurantId: string,
+  items: Array<{ menu_item_id: string; quantity: number; price: number }>,
+  discountCode?: string
+) {
+  const supabase = await createClient()
+
+  // Check for existing active order
+  const existingOrder = await getActiveOrder(tableId)
+  if (existingOrder) {
+    throw new Error('An active order already exists for this table')
+  }
+
+  // Calculate subtotal
+  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+
+  // Apply discount if provided
+  let discountAmount = 0
+  let discountCodeId: string | null = null
+
+  if (discountCode) {
+    const { data: discount, error: discountError } = await supabase
+      .from('discount_codes')
+      .select('*')
+      .eq('restaurant_id', restaurantId)
+      .eq('code', discountCode.toUpperCase())
+      .eq('is_active', true)
+      .single()
+
+    if (!discountError && discount) {
+      // Check expiration
+      if (discount.expires_at && new Date(discount.expires_at) < new Date()) {
+        throw new Error('Discount code has expired')
+      }
+
+      // Check if single-use and already used
+      if (discount.is_single_use) {
+        const { data: used } = await supabase
+          .from('order_discounts')
+          .select('*')
+          .eq('discount_code_id', discount.id)
+          .limit(1)
+          .maybeSingle()
+
+        if (used) {
+          throw new Error('Discount code has already been used')
+        }
+      }
+
+      discountCodeId = discount.id
+
+      if (discount.discount_type === 'percentage') {
+        discountAmount = subtotal * (discount.discount_value / 100)
+      } else {
+        discountAmount = discount.discount_value
+      }
+
+      // Ensure discount doesn't exceed subtotal
+      discountAmount = Math.min(discountAmount, subtotal)
+    } else if (discountCode) {
+      throw new Error('Invalid discount code')
+    }
+  }
+
+  const totalAmount = subtotal - discountAmount
+
+  // Generate confirmation code
+  let confirmationCode: string
+  const { data: confirmationCodeData, error: codeError } = await supabase
+    .rpc('generate_confirmation_code')
+
+  if (codeError || !confirmationCodeData) {
+    // Fallback to JavaScript generation if RPC fails
+    const { generateConfirmationCode } = await import('@/lib/utils/confirmation-code')
+    let attempts = 0
+    const maxAttempts = 10
+    
+    do {
+      confirmationCode = generateConfirmationCode()
+      const { data: existing } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('confirmation_code', confirmationCode)
+        .limit(1)
+        .maybeSingle()
+      
+      if (!existing) {
+        break
+      }
+      attempts++
+    } while (attempts < maxAttempts)
+    
+    if (attempts >= maxAttempts) {
+      throw new Error('Failed to generate unique confirmation code')
+    }
+  } else {
+    confirmationCode = confirmationCodeData as string
+  }
+
+  // Set expiration (30 minutes from now)
+  const expiresAt = new Date()
+  expiresAt.setMinutes(expiresAt.getMinutes() + 30)
+
+  // Create order
+  const { data: order, error: orderError } = await supabase
+    .from('orders')
+    .insert({
+      restaurant_id: restaurantId,
+      table_id: tableId,
+      confirmation_code: confirmationCode,
+      status: 'awaiting_cashier_confirmation',
+      subtotal,
+      discount_amount: discountAmount,
+      total_amount: totalAmount,
+      expires_at: expiresAt.toISOString(),
+    })
+    .select()
+    .single()
+
+  if (orderError) {
+    throw new Error(`Failed to create order: ${orderError.message}`)
+  }
+
+  // Create order items
+  const orderItems = items.map(item => ({
+    order_id: order.id,
+    menu_item_id: item.menu_item_id,
+    quantity: item.quantity,
+    price: item.price,
+  }))
+
+  const { error: itemsError } = await supabase
+    .from('order_items')
+    .insert(orderItems)
+
+  if (itemsError) {
+    // Rollback order creation
+    await supabase.from('orders').delete().eq('id', order.id)
+    throw new Error(`Failed to create order items: ${itemsError.message}`)
+  }
+
+  // Create order discount record if applicable
+  if (discountCodeId) {
+    await supabase
+      .from('order_discounts')
+      .insert({
+        order_id: order.id,
+        discount_code_id: discountCodeId,
+        discount_amount: discountAmount,
+      })
+  }
+
+  // Get table number for revalidation
+  const { data: tableData } = await supabase
+    .from('tables')
+    .select('table_number')
+    .eq('id', tableId)
+    .single()
+  
+  if (tableData) {
+    revalidatePath(`/table/${tableData.table_number}/order`)
+  }
+  revalidatePath('/admin')
+  return order
+}
+
+export async function verifyOrderByCode(confirmationCode: string) {
+  const supabase = await createClient()
+  
+  const { data, error } = await supabase
+    .from('orders')
+    .select(`
+      *,
+      tables (*),
+      restaurants (*),
+      order_items (
+        *,
+        menu_items (*)
+      )
+    `)
+    .eq('confirmation_code', confirmationCode.toUpperCase())
+    .single()
+
+  if (error) {
+    return null
+  }
+
+  return data
+}
+
+export async function updateOrderStatus(
+  orderId: string,
+  status: 'confirmed' | 'completed' | 'cancelled'
+) {
+  const supabase = await createClient()
+
+  const updateData: any = { status }
+  if (status === 'completed') {
+    updateData.completed_at = new Date().toISOString()
+  }
+
+  const { data, error } = await supabase
+    .from('orders')
+    .update(updateData)
+    .eq('id', orderId)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to update order: ${error.message}`)
+  }
+
+  revalidatePath('/admin')
+  return data
+}
+
+export async function getAllOrders(restaurantId?: string) {
+  const supabase = await createClient()
+  
+  let query = supabase
+    .from('orders')
+    .select(`
+      *,
+      tables (*),
+      restaurants (*),
+      order_items (
+        *,
+        menu_items (*)
+      )
+    `)
+    .order('created_at', { ascending: false })
+
+  if (restaurantId) {
+    query = query.eq('restaurant_id', restaurantId)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    throw new Error(`Failed to fetch orders: ${error.message}`)
+  }
+
+  return data || []
+}
+
+export async function getOrdersByStatus(
+  status: string,
+  restaurantId?: string
+) {
+  const supabase = await createClient()
+  
+  let query = supabase
+    .from('orders')
+    .select(`
+      *,
+      tables (*),
+      restaurants (*),
+      order_items (
+        *,
+        menu_items (*)
+      )
+    `)
+    .eq('status', status)
+    .order('created_at', { ascending: false })
+
+  if (restaurantId) {
+    query = query.eq('restaurant_id', restaurantId)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    throw new Error(`Failed to fetch orders: ${error.message}`)
+  }
+
+  return data || []
+}
+
