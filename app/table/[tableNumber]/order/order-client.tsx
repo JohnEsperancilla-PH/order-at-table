@@ -73,24 +73,42 @@ export function OrderPageClient({
     try {
       const key = `order_session_${table.id}`
       const stored = typeof window !== 'undefined' ? localStorage.getItem(key) : null
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (parsed?.id) {
-          setCustomerSessionId(parsed.id)
-          if (parsed.name) setCustomerName(parsed.name)
-          ;(async () => {
-            try {
-              const sessionOrder = await getActiveOrderForSession(table.id, parsed.id)
-              if (sessionOrder) setOrderPlaced(sessionOrder)
-            } catch (err) {
-              console.error('Failed to load session order:', err)
-            }
-          })()
-        }
+      if (!stored) {
+        // No session found — redirect to table landing page
+        router.replace(`/table/${table.table_number}`)
+        return
       }
+      const parsed = JSON.parse(stored)
+      if (!parsed?.id || !parsed?.name) {
+        // Invalid session — redirect to table landing page
+        router.replace(`/table/${table.table_number}`)
+        return
+      }
+      setCustomerSessionId(parsed.id)
+      if (parsed.name) setCustomerName(parsed.name)
+      ;(async () => {
+        try {
+          const sessionOrder = await getActiveOrderForSession(table.id, parsed.id)
+          if (sessionOrder) setOrderPlaced(sessionOrder)
+        } catch (err) {
+          console.error('Failed to load session order:', err)
+        }
+      })()
     } catch (err) {
-      console.error('Failed to parse session:', err)
+      // Invalid JSON in localStorage — redirect
+      router.replace(`/table/${table.table_number}`)
     }
+  }, [table?.id, router, table?.table_number])
+
+  // Clear session when the page/tab is closed
+  useEffect(() => {
+    if (!table?.id) return
+    const key = `order_session_${table.id}`
+    const handleBeforeUnload = () => {
+      localStorage.removeItem(key)
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [table?.id])
 
   const filteredItems = useMemo(() => menuItems, [menuItems])
