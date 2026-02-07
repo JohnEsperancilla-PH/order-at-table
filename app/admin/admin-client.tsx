@@ -17,12 +17,15 @@ import { format } from 'date-fns'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { formatCurrency } from '@/lib/utils'
+import { CounterOrderForm } from './CounterOrderForm'
 
 interface AdminDashboardClientProps {
   initialOrders: any[]
+  tables?: any[]
+  menuItems?: any[]
 }
 
-export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProps) {
+export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [] }: AdminDashboardClientProps) {
   const [orders, setOrders] = useState(initialOrders)
   const [searchCode, setSearchCode] = useState('')
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
@@ -32,6 +35,7 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [searchResultId, setSearchResultId] = useState<string | null>(null)
+  const [showCounterOrderModal, setShowCounterOrderModal] = useState(false)
 
   const loadOrders = async (status?: string, silent = false) => {
     setIsRefreshing(true)
@@ -156,6 +160,13 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setShowCounterOrderModal(true)}
+            >
+              + Counter Order
+            </Button>
             <div className="flex items-center gap-2 text-sm">
               <Switch
                 id="auto-refresh"
@@ -293,8 +304,19 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
                                   <span className="text-muted-foreground/40">&middot;</span>
                                   <span>{format(new Date(order.created_at), 'MMM d, HH:mm')}</span>
                                 </div>
+                                {order.customer_name && (
+                                  <div className="mt-2 text-sm">
+                                    <span className="text-muted-foreground">Customer: </span>
+                                    <span className="font-medium text-foreground">{order.customer_name}</span>
+                                  </div>
+                                )}
                               </div>
-                              {getStatusBadge(order.status)}
+                              <div className="flex flex-col gap-2 items-end">
+                                {getStatusBadge(order.status)}
+                                <Badge variant={order.customer_session_id ? 'secondary' : 'outline'}>
+                                  {order.customer_session_id ? 'Table Order' : 'Counter Order'}
+                                </Badge>
+                              </div>
                             </div>
                             <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
                               <span className="text-sm text-muted-foreground">{(order as any).order_items?.length || '—'} items</span>
@@ -395,6 +417,15 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
                 </div>
               </div>
 
+              {selectedOrder.customer_name && (
+                <div className="rounded-lg bg-muted/50 p-3">
+                  <p className="text-xs text-muted-foreground mb-0.5">Customer Name</p>
+                  <p className="text-lg font-semibold">
+                    {selectedOrder.customer_name}
+                  </p>
+                </div>
+              )}
+
               <Separator />
 
               <div>
@@ -451,6 +482,14 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
           )}
         </DialogContent>
       </Dialog>
+
+      <CounterOrderForm
+        open={showCounterOrderModal}
+        onOpenChange={setShowCounterOrderModal}
+        tables={tables}
+        menuItems={menuItems}
+        onOrderCreated={() => loadOrders(activeTab === 'incoming' ? undefined : activeTab)}
+      />
     </div>
   )
 }

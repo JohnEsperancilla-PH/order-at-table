@@ -88,7 +88,7 @@ export async function getMenuCategories(restaurantId: string, includeInactive = 
 
 export async function getActiveOrder(tableId: string) {
   const supabase = await createClient()
-  
+
   const { data, error } = await supabase
     .from('orders')
     .select(`
@@ -106,6 +106,34 @@ export async function getActiveOrder(tableId: string) {
 
   if (error && error.code !== 'PGRST116') {
     throw new Error(`Failed to fetch order: ${error.message}`)
+  }
+
+  return data || null
+}
+
+// Fetch active order for a specific customer session on a table
+export async function getActiveOrderForSession(tableId: string, customerSessionId: string) {
+  if (!customerSessionId) return null
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('orders')
+    .select(`
+      *,
+      order_items (
+        *,
+        menu_items (*)
+      )
+    `)
+    .eq('table_id', tableId)
+    .eq('customer_session_id', customerSessionId)
+    .in('status', ['pending', 'awaiting_cashier_confirmation', 'confirmed'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`Failed to fetch session order: ${error.message}`)
   }
 
   return data || null
@@ -143,14 +171,19 @@ export async function createOrder(
   tableId: string,
   restaurantId: string,
   items: Array<{ menu_item_id: string; quantity: number; price: number }>,
-  discountCode?: string
+  discountCode?: string,
+  customerSessionId?: string,
+  customerName?: string
 ) {
   const supabase = await createClient()
 
-  // Check for existing active order
-  const existingOrder = await getActiveOrder(tableId)
-  if (existingOrder) {
-    throw new Error('An active order already exists for this table')
+  // If session provided, prevent duplicate active orders for the same session
+  let existingOrder = null
+  if (customerSessionId) {
+    existingOrder = await getActiveOrderForSession(tableId, customerSessionId)
+    if (existingOrder) {
+      throw new Error('You already have an active order for this table')
+    }
   }
 
   // Calculate subtotal
@@ -276,6 +309,8 @@ export async function createOrder(
       discount_amount: discountAmount,
       total_amount: totalAmount,
       expires_at: expiresAt.toISOString(),
+      customer_session_id: customerSessionId || null,
+      customer_name: customerName || null,
     })
     .select()
     .single()

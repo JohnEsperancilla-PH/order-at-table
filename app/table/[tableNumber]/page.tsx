@@ -63,7 +63,7 @@ export default async function TableWelcomePage({
                   </Badge>
 
                   <Button asChild size="lg" className="w-full rounded-xl h-12 text-base">
-                    <Link href={`/table/${table.table_number}/order`}>
+                    <Link href={`/table/${table.table_number}/start`}>
                       <UtensilsCrossed className="w-5 h-5 mr-2" />
                       Start Your Order
                     </Link>

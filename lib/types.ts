@@ -78,6 +78,8 @@ export interface Order {
   created_at: string
   updated_at: string
   completed_at: string | null
+  customer_session_id?: string | null
+  customer_name?: string | null
 }
 
 export interface OrderItem {

@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ShoppingCart, Minus, CheckCircle2, X, RefreshCw, Plus, ShoppingBag, Trash2 } from 'lucide-react'
-import { createOrder, getOrderById } from '@/lib/actions/orders'
+import { createOrder, getOrderById, getActiveOrderForSession } from '@/lib/actions/orders'
 import { CartItem, MenuItem, MenuCategory, Order } from '@/lib/types'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useRouter } from 'next/navigation'
@@ -34,6 +34,8 @@ export function OrderPageClient({
 }: OrderPageClientProps) {
   const router = useRouter()
   const [cart, setCart] = useState<CartItem[]>([])
+  const [customerName, setCustomerName] = useState<string | null>(null)
+  const [customerSessionId, setCustomerSessionId] = useState<string | null>(null)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [discountCode, setDiscountCode] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -64,6 +66,32 @@ export function OrderPageClient({
 
     return () => clearInterval(interval)
   }, [orderPlaced?.id])
+
+  // Load (or resume) session for this table from localStorage
+  useEffect(() => {
+    if (!table?.id) return
+    try {
+      const key = `order_session_${table.id}`
+      const stored = typeof window !== 'undefined' ? localStorage.getItem(key) : null
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (parsed?.id) {
+          setCustomerSessionId(parsed.id)
+          if (parsed.name) setCustomerName(parsed.name)
+          ;(async () => {
+            try {
+              const sessionOrder = await getActiveOrderForSession(table.id, parsed.id)
+              if (sessionOrder) setOrderPlaced(sessionOrder)
+            } catch (err) {
+              console.error('Failed to load session order:', err)
+            }
+          })()
+        }
+      }
+    } catch (err) {
+      console.error('Failed to parse session:', err)
+    }
+  }, [table?.id])
 
   const filteredItems = useMemo(() => menuItems, [menuItems])
 
@@ -144,6 +172,28 @@ export function OrderPageClient({
     setError(null)
 
     try {
+      // Ensure customer name/session exists
+      if (!customerName || !customerName.trim()) {
+        setError('Please enter your name before placing the order')
+        setIsSubmitting(false)
+        return
+      }
+
+      // Create or persist a session id for this customer on this table
+      let sessionId = customerSessionId
+      if (!sessionId) {
+        sessionId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+          ? (crypto as any).randomUUID()
+          : `sess_${Date.now()}_${Math.random().toString(36).slice(2,8)}`
+        setCustomerSessionId(sessionId)
+        try {
+          const key = `order_session_${table.id}`
+          localStorage.setItem(key, JSON.stringify({ id: sessionId, name: customerName }))
+        } catch (e) {
+          // ignore localStorage errors
+        }
+      }
+
       const orderItems = cart.map(item => {
         const itemPrice = item.size
           ? item.menu_item.price + item.size.price_modifier
@@ -160,7 +210,9 @@ export function OrderPageClient({
         table.id,
         table.restaurant_id,
         orderItems,
-        discountCode.trim() || undefined
+        discountCode.trim() || undefined,
+        sessionId ?? undefined,
+        customerName ?? undefined
       )
 
       setOrderPlaced(order)
@@ -218,6 +270,12 @@ export function OrderPageClient({
             </p>
           </div>
         </div>
+
+        {customerName && (
+          <p className="text-2xl font-bold text-foreground mb-6">
+            Welcome, {customerName}!
+          </p>
+        )}
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Menu Section */}
@@ -554,16 +612,27 @@ export function OrderPageClient({
             </div>
 
             <div>
-              <Label htmlFor="discount-code" className="text-sm">Discount Code (Optional)</Label>
+              <Label htmlFor="customer-name" className="text-sm">Your Name</Label>
               <Input
-                id="discount-code"
-                value={discountCode}
-                onChange={e => setDiscountCode(e.target.value.toUpperCase())}
-                autoCapitalize="characters"
-                autoComplete="off"
-                placeholder="Enter code"
+                id="customer-name"
+                value={customerName ?? ''}
+                onChange={e => setCustomerName(e.target.value)}
+                placeholder="e.g., Alice"
                 className="mt-1.5 h-11"
               />
+
+              <div className="mt-3">
+                <Label htmlFor="discount-code" className="text-sm">Discount Code (Optional)</Label>
+                <Input
+                  id="discount-code"
+                  value={discountCode}
+                  onChange={e => setDiscountCode(e.target.value.toUpperCase())}
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  placeholder="Enter code"
+                  className="mt-1.5 h-11"
+                />
+              </div>
             </div>
             <Separator />
             <div className="space-y-1">
