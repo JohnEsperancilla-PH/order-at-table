@@ -1,5 +1,5 @@
 import { getTableByNumber } from '@/lib/actions/orders'
-import { getMenuCategories, getMenuItems, getActiveOrder } from '@/lib/actions/orders'
+import { getMenuCategories, getMenuItems } from '@/lib/actions/orders'
 import { getSizesForMenuItems } from '@/lib/actions/sizes'
 import { OrderPageClient } from './order-client'
 import { notFound } from 'next/navigation'
@@ -103,10 +103,9 @@ export default async function OrderPage({
       )
     }
 
-    const [categories, menuItems, activeOrder] = await Promise.all([
+    const [categories, menuItems] = await Promise.all([
       getMenuCategories(table.restaurant_id),
       getMenuItems(table.restaurant_id, true),
-      getActiveOrder(table.id),
     ])
 
     // Load sizes for all menu items
@@ -124,7 +123,6 @@ export default async function OrderPage({
         table={table}
         categories={categories}
         menuItems={menuItemsWithSizes}
-        activeOrder={activeOrder}
       />
     )
   } catch (error) {

@@ -7,11 +7,28 @@ export default async function OrderStatusPage({
 }: {
   params: Promise<{ tableNumber: string; orderId: string; status: string }>
 }) {
-  const { tableNumber, orderId } = await params
+  let order
+  let tableNumber
+  let orderId
 
   try {
+    const resolvedParams = await params
+    tableNumber = resolvedParams.tableNumber
+    orderId = resolvedParams.orderId
+
+    if (!tableNumber || !orderId) {
+      return notFound()
+    }
+
+    // Verify table exists
     await getTableByNumber(tableNumber)
-    const order = await getOrderById(orderId, tableNumber)
+
+    // Fetch order with full relationships
+    order = await getOrderById(orderId, tableNumber)
+
+    if (!order) {
+      return notFound()
+    }
 
     return (
       <OrderStatusClient
@@ -21,7 +38,11 @@ export default async function OrderStatusPage({
       />
     )
   } catch (error) {
-    console.error('Error loading order status page:', error)
-    notFound()
+    console.error('Error loading order status page:', {
+      error: error instanceof Error ? error.message : String(error),
+      tableNumber,
+      orderId,
+    })
+    return notFound()
   }
 }

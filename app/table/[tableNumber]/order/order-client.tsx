@@ -23,7 +23,7 @@ interface OrderPageClientProps {
   table: any
   categories: MenuCategory[]
   menuItems: any[]
-  activeOrder: Order | null
+  activeOrder?: Order | null
 }
 
 export function OrderPageClient({
@@ -40,7 +40,7 @@ export function OrderPageClient({
   const [discountCode, setDiscountCode] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [orderPlaced, setOrderPlaced] = useState<Order | null>(activeOrder)
+  const [orderPlaced, setOrderPlaced] = useState<Order | null>(activeOrder ?? null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [addedMessage, setAddedMessage] = useState<string | null>(null)
   const [isCartOpen, setIsCartOpen] = useState(false)

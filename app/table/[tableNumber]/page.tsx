@@ -11,11 +11,21 @@ export default async function TableWelcomePage({
 }: {
   params: Promise<{ tableNumber: string }>
 }) {
-  const { tableNumber } = await params
+  try {
+    const { tableNumber } = await params
 
-  const table = await getTableByNumber(tableNumber)
-  const restaurant = table.restaurants
-  const isOpen = restaurant.is_open ?? true
+    if (!tableNumber) {
+      return <div className="p-6 text-center">Invalid table number</div>;
+    }
+
+    const table = await getTableByNumber(tableNumber)
+    
+    if (!table) {
+      return <div className="p-6 text-center">Table not found</div>;
+    }
+
+    const restaurant = table.restaurants
+    const isOpen = restaurant?.is_open ?? true
 
   return (
     <div className="min-h-[100dvh] bg-gradient-to-b from-background to-muted/20 flex flex-col">
@@ -23,7 +33,7 @@ export default async function TableWelcomePage({
       <div className="relative overflow-hidden">
         <div
           className="aspect-[16/9] w-full bg-gradient-to-br from-primary/20 to-primary/5"
-          style={restaurant.cover_image_url ? {
+          style={restaurant?.cover_image_url ? {
             backgroundImage: `url(${restaurant.cover_image_url})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
@@ -32,7 +42,7 @@ export default async function TableWelcomePage({
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 p-5">
           <h1 className="text-2xl sm:text-3xl font-bold text-white drop-shadow-md">
-            {restaurant.name}
+            {restaurant?.name || 'Restaurant'}
           </h1>
           {restaurant.description && (
             <p className="text-white/70 text-sm mt-1 line-clamp-2">
@@ -81,17 +91,17 @@ export default async function TableWelcomePage({
               )}
 
               {/* Opening hours & contact */}
-              {(restaurant.opening_hours || restaurant.contact_number) && (
+              {(restaurant?.opening_hours || restaurant?.contact_number) && (
                 <>
                   <Separator />
                   <div className="flex flex-col gap-2 text-sm">
-                    {restaurant.opening_hours && (
+                    {restaurant?.opening_hours && (
                       <div className="flex items-center gap-2 text-muted-foreground justify-center">
                         <Clock className="w-4 h-4 shrink-0" />
                         <span>{restaurant.opening_hours}</span>
                       </div>
                     )}
-                    {restaurant.contact_number && (
+                    {restaurant?.contact_number && (
                       <div className="flex items-center gap-2 text-muted-foreground justify-center">
                         <Phone className="w-4 h-4 shrink-0" />
                         <a href={`tel:${restaurant.contact_number}`} className="hover:underline">
@@ -108,4 +118,8 @@ export default async function TableWelcomePage({
       </div>
     </div>
   )
+  } catch (error) {
+    console.error('Error in TableWelcomePage:', error)
+    return <div className="p-6 text-center text-destructive">Error loading page. Please try again.</div>;
+  }
 }

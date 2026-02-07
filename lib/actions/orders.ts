@@ -142,11 +142,13 @@ export async function getActiveOrderForSession(tableId: string, customerSessionI
 export async function getOrderById(orderId: string, tableNumber?: string) {
   const supabase = await createClient()
 
+  // Use left join instead of inner join to prevent failures if relationships are missing
+  // Then validate the relationships afterward
   let query = supabase
     .from('orders')
     .select(`
       *,
-      tables!inner (*, restaurants (*)),
+      tables (*, restaurants (*)),
       order_items (
         *,
         menu_items (*)
@@ -155,6 +157,7 @@ export async function getOrderById(orderId: string, tableNumber?: string) {
     .eq('id', orderId)
 
   if (tableNumber) {
+    // Validate table number separately to avoid filter issues
     query = query.eq('tables.table_number', tableNumber)
   }
 
@@ -162,6 +165,19 @@ export async function getOrderById(orderId: string, tableNumber?: string) {
 
   if (error) {
     throw new Error(`Failed to fetch order: ${error.message}`)
+  }
+
+  if (!data) {
+    throw new Error('Order not found')
+  }
+
+  // Ensure required relationships exist
+  if (!data.tables) {
+    throw new Error('Order table relationship not found')
+  }
+
+  if (tableNumber && data.tables.table_number !== tableNumber) {
+    throw new Error('Table number mismatch')
   }
 
   return data
