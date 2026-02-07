@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
-import { Search, CheckCircle2, XCircle, Clock, Package, Eye, RefreshCw } from 'lucide-react'
+import { Search, CheckCircle2, XCircle, Clock, Package, Eye, RefreshCw, Inbox } from 'lucide-react'
 import { updateOrderStatus, getAllOrders, getOrdersByStatus } from '@/lib/actions/orders'
 import { Order, OrderStatus } from '@/lib/types'
 import { format } from 'date-fns'
@@ -27,7 +27,7 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
   const [searchCode, setSearchCode] = useState('')
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [verifyError, setVerifyError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState('all')
+  const [activeTab, setActiveTab] = useState('incoming')
   const [isLoading, setIsLoading] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -39,7 +39,7 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
       setIsLoading(true)
     }
     try {
-      const data = status && status !== 'all'
+      const data = status && status !== 'all' && status !== 'incoming'
         ? await getOrdersByStatus(status)
         : await getAllOrders()
       setOrders(data)
@@ -61,7 +61,7 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
 
   useEffect(() => {
     if (activeTab) {
-      loadOrders(activeTab === 'all' ? undefined : activeTab)
+      loadOrders(activeTab === 'incoming' ? undefined : activeTab)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
@@ -71,7 +71,7 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
     if (!autoRefresh) return
 
     const interval = setInterval(() => {
-      loadOrders(activeTab === 'all' ? undefined : activeTab, true)
+      loadOrders(activeTab === 'incoming' ? undefined : activeTab, true)
     }, 5000) // Refresh every 5 seconds
 
     return () => clearInterval(interval)
@@ -129,7 +129,9 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
   }
 
   const filteredOrders = orders.filter(order => {
-    if (activeTab === 'all') return true
+    if (activeTab === 'incoming') {
+      return ['pending', 'awaiting_cashier_confirmation', 'confirmed'].includes(order.status)
+    }
     return order.status === activeTab
   })
 
@@ -142,10 +144,11 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
 
   const awaitingCount = orders.filter(o => o.status === 'awaiting_cashier_confirmation').length
   const pendingCount = orders.filter(o => o.status === 'pending').length
+  const incomingCount = orders.filter(o => ['pending', 'awaiting_cashier_confirmation', 'confirmed'].includes(o.status)).length
 
   return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold">Orders</h1>
             <p className="text-muted-foreground">
@@ -153,27 +156,33 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 text-sm">
               <Switch
                 id="auto-refresh"
                 checked={autoRefresh}
                 onCheckedChange={setAutoRefresh}
               />
-              <Label htmlFor="auto-refresh" className="cursor-pointer">
-                Auto-refresh
+              <Label htmlFor="auto-refresh" className="cursor-pointer text-sm text-muted-foreground">
+                Live
               </Label>
+              {autoRefresh && (
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                </span>
+              )}
             </div>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => loadOrders(activeTab === 'all' ? undefined : activeTab)}
+              onClick={() => loadOrders(activeTab === 'incoming' ? undefined : activeTab)}
               disabled={isLoading}
             >
-              <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Refresh
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             </Button>
           </div>
         </div>
+
 
       {/* Orders Table */}
       <Card>
@@ -235,115 +244,105 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-6">
-                <TabsTrigger value="all">All</TabsTrigger>
-                <TabsTrigger value="pending">
-                  Pending
-                  {pendingCount > 0 && (
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="incoming">
+                  Incoming
+                  {incomingCount > 0 && (
                     <Badge variant="secondary" className="ml-2">
-                      {pendingCount}
+                      {incomingCount}
                     </Badge>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="awaiting_cashier_confirmation">
-                  Awaiting
-                  {awaitingCount > 0 && (
-                    <Badge variant="secondary" className="ml-2">
-                      {awaitingCount}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="confirmed">Confirmed</TabsTrigger>
                 <TabsTrigger value="completed">Completed</TabsTrigger>
                 <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
               </TabsList>
 
               <TabsContent value={activeTab} className="mt-4">
                 {isLoading ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Loading orders...
+                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+                    <RefreshCw className="w-8 h-8 animate-spin text-muted-foreground/50" />
+                    <p className="text-sm">Loading orders...</p>
                   </div>
                 ) : displayedOrders.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    {searchResultId ? 'No matching order found' : 'No orders found'}
+                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+                    <Inbox className="w-12 h-12 text-muted-foreground/30" />
+                    <p className="text-sm">{searchResultId ? 'No matching order found' : 'No orders in this view'}</p>
                   </div>
                 ) : (
                   <ScrollArea className="h-[600px]">
-                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       {displayedOrders.map((order: any) => (
-                        <Card key={order.id} className="overflow-hidden border border-border/80 shadow-sm">
-                          <CardContent className="space-y-4 p-4 sm:p-5">
+                        <Card
+                          key={order.id}
+                          className={`overflow-hidden transition-all duration-200 hover:shadow-md ${
+                            order.status === 'awaiting_cashier_confirmation'
+                              ? 'border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-amber-950/10'
+                              : order.status === 'pending'
+                                ? 'border-blue-200 dark:border-blue-800'
+                                : ''
+                          }`}
+                        >
+                          <CardContent className="space-y-3 p-4">
                             <div className="flex items-start justify-between gap-3">
                               <div>
-                                <p className="text-xs uppercase tracking-wide text-muted-foreground">Code</p>
-                                <p className="font-mono text-xl font-semibold">
+                                <p className="font-mono text-xl font-bold tracking-wider">
                                   {order.confirmation_code}
                                 </p>
+                                <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                                  <span>Table {order.tables?.table_number || 'N/A'}</span>
+                                  <span className="text-muted-foreground/40">&middot;</span>
+                                  <span>{format(new Date(order.created_at), 'MMM d, HH:mm')}</span>
+                                </div>
                               </div>
                               {getStatusBadge(order.status)}
                             </div>
-                            <div className="flex items-center justify-between text-sm text-muted-foreground">
-                              <span>Table {order.tables?.table_number || 'N/A'}</span>
-                              <span>{format(new Date(order.created_at), 'MMM d, HH:mm')}</span>
+                            <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
+                              <span className="text-sm text-muted-foreground">{(order as any).order_items?.length || '—'} items</span>
+                              <span className="text-lg font-bold tabular-nums">
+                                {formatCurrency(order.total_amount)}
+                              </span>
                             </div>
-                            <div className="rounded-md bg-muted/40 px-3 py-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm text-muted-foreground">Total</span>
-                                <span className="text-lg font-semibold">
-                                  {formatCurrency(order.total_amount)}
-                                </span>
-                              </div>
-                            </div>
-                            <div
-                              className={`grid gap-2 ${
-                                order.status === 'awaiting_cashier_confirmation'
-                                  ? '[grid-template-columns:80px_1fr_1fr]'
-                                  : order.status === 'confirmed'
-                                    ? '[grid-template-columns:80px_1fr]'
-                                    : '[grid-template-columns:80px]'
-                              }`}
-                            >
+                            <div className="flex flex-wrap gap-2">
                               <Button
                                 size="sm"
-                                variant="outline"
-                                className="w-full"
+                                variant="ghost"
+                                className="h-8 px-3 text-xs"
                                 onClick={() => {
                                   const found = orders.find((o: any) => o.id === order.id)
                                   setSelectedOrder(found || order)
                                 }}
                               >
-                                <Eye className="w-4 h-4 mr-1" />
-                                View
+                                <Eye className="w-3.5 h-3.5 mr-1" />
+                                Details
                               </Button>
                               {order.status === 'awaiting_cashier_confirmation' && (
                                 <>
                                   <Button
                                     size="sm"
-                                    className="w-full"
+                                    className="h-8 px-4 text-xs flex-1"
                                     onClick={() => handleUpdateStatus(order.id, 'confirmed')}
                                   >
-                                    <CheckCircle2 className="w-4 h-4 mr-1" />
-                                    Confirm
+                                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                                    Confirm Payment
                                   </Button>
                                   <Button
                                     size="sm"
-                                    variant="destructive"
-                                    className="w-full"
+                                    variant="outline"
+                                    className="h-8 px-3 text-xs text-destructive hover:text-destructive"
                                     onClick={() => handleUpdateStatus(order.id, 'cancelled')}
                                   >
-                                    <XCircle className="w-4 h-4 mr-1" />
-                                    Cancel
+                                    <XCircle className="w-3.5 h-3.5" />
                                   </Button>
                                 </>
                               )}
                               {order.status === 'confirmed' && (
                                 <Button
                                   size="sm"
-                                  className="w-full"
+                                  className="h-8 px-4 text-xs flex-1"
                                   onClick={() => handleUpdateStatus(order.id, 'completed')}
                                 >
-                                  <CheckCircle2 className="w-4 h-4 mr-1" />
-                                  Complete
+                                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                                  Mark Complete
                                 </Button>
                               )}
                             </div>
@@ -372,55 +371,49 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
           </DialogHeader>
 
           {selectedOrder && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Table</p>
-                  <p className="font-medium">
+            <div className="space-y-5">
+              {/* Status + meta row */}
+              <div className="flex items-center justify-between">
+                {getStatusBadge(selectedOrder.status)}
+                <span className="text-xs text-muted-foreground">
+                  {format(new Date(selectedOrder.created_at), 'PPpp')}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg bg-muted/50 p-3">
+                  <p className="text-xs text-muted-foreground mb-0.5">Table</p>
+                  <p className="text-lg font-semibold">
                     {(selectedOrder as any).tables?.table_number || 'N/A'}
                   </p>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Status</p>
-                  <div className="mt-1">
-                    {getStatusBadge(selectedOrder.status)}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Created</p>
-                  <p className="font-medium">
-                    {format(new Date(selectedOrder.created_at), 'PPpp')}
+                <div className="rounded-lg bg-muted/50 p-3">
+                  <p className="text-xs text-muted-foreground mb-0.5">Total</p>
+                  <p className="text-lg font-bold tabular-nums">
+                    {formatCurrency(selectedOrder.total_amount)}
                   </p>
                 </div>
-                {(selectedOrder as any).restaurants && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Restaurant</p>
-                    <p className="font-medium">
-                      {(selectedOrder as any).restaurants.name}
-                    </p>
-                  </div>
-                )}
               </div>
 
               <Separator />
 
               <div>
-                <p className="font-medium mb-2">Order Items</p>
-                <div className="space-y-2">
+                <p className="text-sm font-semibold mb-2">Items</p>
+                <div className="rounded-lg border divide-y">
                   {(selectedOrder as any).order_items?.map((item: any) => (
                     <div
                       key={item.id}
-                      className="flex justify-between items-center p-2 bg-muted rounded"
+                      className="flex justify-between items-center px-3 py-2.5"
                     >
-                      <div>
-                        <p className="font-medium">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm">
                           {item.menu_items?.name || 'Unknown Item'}
                         </p>
-                        <p className="text-sm text-muted-foreground">
-                          Qty: {item.quantity} × {formatCurrency(item.price)}
+                        <p className="text-xs text-muted-foreground">
+                          {item.quantity} &times; {formatCurrency(item.price)}
                         </p>
                       </div>
-                      <p className="font-medium">
+                      <p className="font-semibold text-sm tabular-nums ml-3">
                         {formatCurrency(item.quantity * item.price)}
                       </p>
                     </div>
@@ -430,34 +423,30 @@ export function AdminDashboardClient({ initialOrders }: AdminDashboardClientProp
 
               <Separator />
 
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span>Subtotal</span>
-                  <span>{formatCurrency(selectedOrder.subtotal)}</span>
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="tabular-nums">{formatCurrency(selectedOrder.subtotal)}</span>
                 </div>
                 {selectedOrder.discount_amount > 0 && (
-                  <div className="flex justify-between text-green-600">
+                  <div className="flex justify-between text-sm text-green-600">
                     <span>Discount</span>
-                    <span>-{formatCurrency(selectedOrder.discount_amount)}</span>
+                    <span className="tabular-nums">-{formatCurrency(selectedOrder.discount_amount)}</span>
                   </div>
                 )}
-                <div className="flex justify-between font-bold text-lg">
+                <div className="flex justify-between font-bold text-base pt-1">
                   <span>Total</span>
-                  <span>{formatCurrency(selectedOrder.total_amount)}</span>
+                  <span className="tabular-nums">{formatCurrency(selectedOrder.total_amount)}</span>
                 </div>
               </div>
 
-              <Separator />
-
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setSelectedOrder(null)}
-                  className="flex-1"
-                >
-                  Close
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                onClick={() => setSelectedOrder(null)}
+                className="w-full"
+              >
+                Close
+              </Button>
             </div>
           )}
         </DialogContent>

@@ -106,6 +106,21 @@ export async function updateMenuItem(
   return data
 }
 
+export async function deleteMenuItem(menuItemId: string) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('menu_items')
+    .delete()
+    .eq('id', menuItemId)
+
+  if (error) {
+    throw new Error(`Failed to delete menu item: ${error.message}`)
+  }
+
+  revalidatePath('/admin/menu')
+}
+
 export async function createMenuCategory(
   restaurantId: string,
   name: string,

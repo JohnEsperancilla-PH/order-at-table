@@ -11,6 +11,9 @@ export interface Restaurant {
   id: string
   name: string
   description: string | null
+  is_open: boolean
+  opening_hours: string | null
+  contact_number: string | null
   created_at: string
   updated_at: string
 }
@@ -48,6 +51,18 @@ export interface MenuItem {
   is_available: boolean
   created_at: string
   updated_at: string
+  sizes?: Size[]
+}
+
+export interface Size {
+  id: string
+  menu_item_id: string
+  name: string
+  price_modifier: number
+  display_order: number
+  is_available: boolean
+  created_at: string
+  updated_at: string
 }
 
 export interface Order {
@@ -71,6 +86,7 @@ export interface OrderItem {
   menu_item_id: string
   quantity: number
   price: number
+  size_id?: string | null
   created_at: string
   menu_item?: MenuItem
 }
@@ -107,5 +123,7 @@ export interface Inventory {
 export interface CartItem {
   menu_item: MenuItem
   quantity: number
+  size_id?: string | null
+  size?: Size | null
 }
 

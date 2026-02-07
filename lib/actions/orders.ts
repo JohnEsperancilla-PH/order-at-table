@@ -118,7 +118,7 @@ export async function getOrderById(orderId: string, tableNumber?: string) {
     .from('orders')
     .select(`
       *,
-      tables!inner (*),
+      tables!inner (*, restaurants (*)),
       order_items (
         *,
         menu_items (*)

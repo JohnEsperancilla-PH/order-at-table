@@ -48,6 +48,9 @@ export function OrderStatusClient({
     <OrderConfirmationView
       order={order}
       isRefreshing={isRefreshing}
+      restaurantName={(order as any)?.tables?.restaurants?.name}
+      tableNumber={(order as any)?.tables?.table_number}
+      coverImageUrl={(order as any)?.tables?.restaurants?.cover_image_url}
       onClose={() => {
         router.replace(`/table/${tableNumber}`)
       }}

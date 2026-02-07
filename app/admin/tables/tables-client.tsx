@@ -23,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Plus, Edit, Trash2, QrCode } from 'lucide-react'
+import { Plus, Edit, Trash2, QrCode, Copy, Check, TableProperties } from 'lucide-react'
 import { createTable, updateTable, deleteTable } from '@/lib/actions/tables'
 import { useRouter } from 'next/navigation'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -46,6 +46,7 @@ export function TablesManagementClient({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deleteTableId, setDeleteTableId] = useState<string | null>(null)
+  const [copiedTableId, setCopiedTableId] = useState<string | null>(null)
   const router = useRouter()
 
   const handleOpenCreateDialog = () => {
@@ -116,10 +117,12 @@ export function TablesManagementClient({
     return `${baseUrl}/table/${tableNumber}/order`
   }
 
-  const handleCopyLink = async (tableNumber: string) => {
-    const url = generateQRUrl(tableNumber)
+  const handleCopyLink = async (table: any) => {
+    const url = generateQRUrl(table.table_number)
     try {
       await navigator.clipboard.writeText(url)
+      setCopiedTableId(table.id)
+      setTimeout(() => setCopiedTableId(null), 2000)
     } catch (copyError) {
       console.error('Failed to copy link:', copyError)
     }
@@ -155,57 +158,70 @@ export function TablesManagementClient({
         </CardHeader>
         <CardContent>
           {tables.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No tables found. Create your first table.
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+              <TableProperties className="w-12 h-12 text-muted-foreground/30" />
+              <p className="text-sm">No tables yet</p>
+              <Button size="sm" variant="outline" onClick={handleOpenCreateDialog}>
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
+                Create your first table
+              </Button>
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {tables.map((table) => (
-                <Card key={table.id} className="overflow-hidden">
-                  <CardContent className="flex min-h-[160px] flex-col gap-3 p-4">
+                <Card key={table.id} className="overflow-hidden transition-all duration-200 hover:shadow-md">
+                  <CardContent className="flex min-h-[140px] flex-col gap-2.5 p-4">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="text-sm text-muted-foreground">Table</p>
-                        <p className="text-2xl font-semibold">{table.table_number}</p>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider">Table</p>
+                        <p className="text-2xl font-bold">{table.table_number}</p>
                       </div>
                       <Badge variant={table.is_active ? 'default' : 'secondary'}>
                         {table.is_active ? 'Active' : 'Inactive'}
                       </Badge>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      Capacity: {table.capacity || 'N/A'}
-                    </div>
-                    <Badge variant="outline" className="w-fit font-mono text-xs">
+                    <p className="text-sm text-muted-foreground">
+                      Capacity: {table.capacity || '—'}
+                    </p>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono bg-muted/50 rounded-md px-2 py-1 w-fit">
                       /table/{table.table_number}/order
-                    </Badge>
-                    <div className="mt-auto flex flex-wrap gap-2">
+                    </div>
+                    <div className="mt-auto flex flex-wrap gap-2 pt-1">
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleCopyLink(table.table_number)}
+                        className="h-8 text-xs"
+                        onClick={() => handleCopyLink(table)}
                       >
-                        <QrCode className="mr-2 h-4 w-4" />
-                        Copy Link
+                        {copiedTableId === table.id ? (
+                          <><Check className="mr-1.5 h-3.5 w-3.5 text-green-500" />Copied!</>
+                        ) : (
+                          <><Copy className="mr-1.5 h-3.5 w-3.5" />Copy Link</>
+                        )}
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        aria-label={`Edit table ${table.table_number}`}
-                        onClick={() => handleOpenEditDialog(table)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        aria-label={`Delete table ${table.table_number}`}
-                        onClick={() => {
-                          setDeleteTableId(table.id)
-                          setIsDeleteDialogOpen(true)
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="ml-auto flex gap-1.5">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          aria-label={`Edit table ${table.table_number}`}
+                          onClick={() => handleOpenEditDialog(table)}
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          aria-label={`Delete table ${table.table_number}`}
+                          onClick={() => {
+                            setDeleteTableId(table.id)
+                            setIsDeleteDialogOpen(true)
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

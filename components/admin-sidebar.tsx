@@ -18,9 +18,15 @@ import {
   Table as TableIcon,
   Tags,
   Wallet,
+  Home,
 } from 'lucide-react'
 
 const menuItems = [
+  {
+    title: 'Dashboard',
+    url: '/admin/dashboard',
+    icon: Home,
+  },
   {
     title: 'Orders',
     url: '/admin',

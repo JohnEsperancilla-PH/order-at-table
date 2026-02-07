@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
-import { Plus, Edit, Trash2 } from 'lucide-react'
+import { Plus, Edit, Trash2, Tags } from 'lucide-react'
 import { MenuCategory } from '@/lib/types'
 import {
   createMenuCategory,
@@ -126,8 +126,13 @@ export function CategoriesManagementClient({
         </CardHeader>
         <CardContent>
           {categories.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground">
-              No categories yet. Add your first category.
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+              <Tags className="w-12 h-12 text-muted-foreground/30" />
+              <p className="text-sm">No categories yet</p>
+              <Button size="sm" variant="outline" onClick={() => handleOpenCategoryDialog()}>
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
+                Add your first category
+              </Button>
             </div>
           ) : (
             <Accordion type="multiple" className="w-full">
@@ -142,12 +147,14 @@ export function CategoriesManagementClient({
                     </div>
                   </AccordionTrigger>
                   <AccordionContent>
-                    <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+                    <div className={`flex items-center justify-between gap-4 rounded-lg border p-3 transition-colors ${category.is_active ? 'hover:bg-muted/30' : 'opacity-60 bg-muted/20'}`}>
                       <div className="flex-1">
-                        {category.description && (
+                        {category.description ? (
                           <p className="text-sm text-muted-foreground">
                             {category.description}
                           </p>
+                        ) : (
+                          <p className="text-sm text-muted-foreground/50 italic">No description</p>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
@@ -161,22 +168,24 @@ export function CategoriesManagementClient({
                         />
                         <Button
                           size="icon"
-                          variant="outline"
+                          variant="ghost"
+                          className="h-8 w-8"
                           aria-label={`Edit category ${category.name}`}
                           onClick={() => handleOpenCategoryDialog(category)}
                         >
-                          <Edit className="w-4 h-4" />
+                          <Edit className="w-3.5 h-3.5" />
                         </Button>
                         <Button
                           size="icon"
-                          variant="destructive"
+                          variant="ghost"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
                           aria-label={`Delete category ${category.name}`}
                           onClick={() => {
                             setDeleteCategoryId(category.id)
                             setIsDeleteDialogOpen(true)
                           }}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     </div>
