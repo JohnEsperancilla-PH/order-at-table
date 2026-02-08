@@ -26,7 +26,7 @@ export default function HomePage() {
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">
                 Access your table&apos;s order page via the QR code provided at your table.
-                The URL format is: /table/[tableNumber]/order
+                The URL format is: /[restaurantSlug]/table/[tableNumber]/order
               </p>
               <Button asChild variant="outline">
                 <Link href="/admin">Admin Dashboard</Link>

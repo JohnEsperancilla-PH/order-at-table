@@ -1,495 +1,306 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
-import { Search, CheckCircle2, XCircle, Clock, Package, Eye, RefreshCw, Inbox } from 'lucide-react'
-import { updateOrderStatus, getAllOrders, getOrdersByStatus } from '@/lib/actions/orders'
-import { Order, OrderStatus } from '@/lib/types'
+import { Building2, Plus, Settings, Eye, ExternalLink, LogOut } from 'lucide-react'
+import { createRestaurant } from '@/lib/actions/restaurants'
+import { logout } from '@/lib/actions/auth'
+import { CreateAccountModal } from '@/components/create-account-modal'
 import { format } from 'date-fns'
-import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
-import { formatCurrency } from '@/lib/utils'
-import { CounterOrderForm } from './CounterOrderForm'
 
-interface AdminDashboardClientProps {
-  initialOrders: any[]
-  tables?: any[]
-  menuItems?: any[]
+interface Restaurant {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  is_open: boolean
+  opening_hours: string | null
+  contact_number: string | null
+  created_at: string
+  updated_at: string
 }
 
-export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [] }: AdminDashboardClientProps) {
-  const [orders, setOrders] = useState(initialOrders)
-  const [searchCode, setSearchCode] = useState('')
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
-  const [verifyError, setVerifyError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState('incoming')
-  const [isLoading, setIsLoading] = useState(false)
-  const [autoRefresh, setAutoRefresh] = useState(true)
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [searchResultId, setSearchResultId] = useState<string | null>(null)
-  const [showCounterOrderModal, setShowCounterOrderModal] = useState(false)
+interface PlatformAdminClientProps {
+  initialRestaurants: Restaurant[]
+}
 
-  const loadOrders = async (status?: string, silent = false) => {
-    setIsRefreshing(true)
-    if (!silent) {
-      setIsLoading(true)
-    }
-    try {
-      const data = status && status !== 'all' && status !== 'incoming'
-        ? await getOrdersByStatus(status)
-        : await getAllOrders()
-      setOrders(data)
-      
-      // Update selected order if it exists
-      if (selectedOrder) {
-        const updatedOrder = data.find((o: any) => o.id === selectedOrder.id)
-        if (updatedOrder) {
-          setSelectedOrder(updatedOrder)
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load orders:', error)
-    } finally {
-      setIsLoading(false)
-      setIsRefreshing(false)
-    }
-  }
+export function PlatformAdminClient({ initialRestaurants }: PlatformAdminClientProps) {
+  const [restaurants, setRestaurants] = useState<Restaurant[]>(initialRestaurants)
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (activeTab) {
-      loadOrders(activeTab === 'incoming' ? undefined : activeTab)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab])
-
-  // Auto-refresh effect
-  useEffect(() => {
-    if (!autoRefresh) return
-
-    const interval = setInterval(() => {
-      loadOrders(activeTab === 'incoming' ? undefined : activeTab, true)
-    }, 5000) // Refresh every 5 seconds
-
-    return () => clearInterval(interval)
-  }, [autoRefresh, activeTab])
-
-  const handleVerifyCode = () => {
-    const query = searchCode.trim().toUpperCase()
-    if (!query) return
-
-    const hasMatch = filteredOrders.some(order =>
-      order.confirmation_code?.toUpperCase().includes(query)
-    )
-
-    setVerifyError(hasMatch ? null : 'Order not found')
-    setSearchResultId(hasMatch ? query : null)
-  }
-
-  const handleUpdateStatus = async (orderId: string, status: OrderStatus) => {
-    try {
-      await updateOrderStatus(orderId, status as any)
-      await loadOrders(activeTab)
-      if (selectedOrder?.id === orderId) {
-        setSelectedOrder(null)
-      }
-    } catch (error: any) {
-      alert(error.message || 'Failed to update order status')
-    }
-  }
-
-  const getStatusBadge = (status: OrderStatus) => {
-    const variants: Record<OrderStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-      pending: 'outline',
-      awaiting_cashier_confirmation: 'secondary',
-      confirmed: 'default',
-      completed: 'default',
-      cancelled: 'destructive',
-    }
-
-    const icons: Record<OrderStatus, any> = {
-      pending: Clock,
-      awaiting_cashier_confirmation: Package,
-      confirmed: CheckCircle2,
-      completed: CheckCircle2,
-      cancelled: XCircle,
-    }
-
-    const Icon = icons[status]
-
-    return (
-      <Badge variant={variants[status]} className="flex items-center gap-1">
-        <Icon className="w-3 h-3" />
-        {status.replace(/_/g, ' ').toUpperCase()}
-      </Badge>
-    )
-  }
-
-  const filteredOrders = orders.filter(order => {
-    if (activeTab === 'incoming') {
-      return ['pending', 'awaiting_cashier_confirmation', 'confirmed'].includes(order.status)
-    }
-    return order.status === activeTab
+  // Form state
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    contactNumber: '',
+    openingHours: '',
   })
 
-  const searchQuery = searchCode.trim().toUpperCase()
-  const displayedOrders = searchQuery
-    ? filteredOrders.filter(order =>
-        order.confirmation_code?.toUpperCase().includes(searchQuery)
-      )
-    : filteredOrders
+  const handleLogout = async () => {
+    setIsLoggingOut(true)
+    try {
+      await logout()
+    } catch (err) {
+      console.error('Logout failed:', err)
+      setIsLoggingOut(false)
+    }
+  }
 
-  const awaitingCount = orders.filter(o => o.status === 'awaiting_cashier_confirmation').length
-  const pendingCount = orders.filter(o => o.status === 'pending').length
-  const incomingCount = orders.filter(o => ['pending', 'awaiting_cashier_confirmation', 'confirmed'].includes(o.status)).length
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target
+    setFormData(prev => ({ ...prev, [name]: value }))
+  }
+
+  const handleCreateRestaurant = async () => {
+    setError(null)
+    setSuccess(null)
+
+    if (!formData.name.trim()) {
+      setError('Restaurant name is required')
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      const newRestaurant = await createRestaurant(formData.name.trim(), {
+        description: formData.description.trim() || undefined,
+        contact_number: formData.contactNumber.trim() || undefined,
+        opening_hours: formData.openingHours.trim() || undefined,
+      })
+
+      setRestaurants(prev => [newRestaurant, ...prev])
+      setSuccess(`Restaurant "${newRestaurant.name}" created successfully! Slug: ${newRestaurant.slug}`)
+      
+      // Reset form
+      setFormData({
+        name: '',
+        description: '',
+        contactNumber: '',
+        openingHours: '',
+      })
+      
+      setTimeout(() => {
+        setIsCreateDialogOpen(false)
+        setSuccess(null)
+      }, 2000)
+    } catch (err: any) {
+      setError(err.message || 'Failed to create restaurant')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   return (
-      <div className="space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Orders</h1>
-            <p className="text-muted-foreground">
-              Manage orders and verify confirmation codes
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => setShowCounterOrderModal(true)}
-            >
-              + Counter Order
-            </Button>
-            <div className="flex items-center gap-2 text-sm">
-              <Switch
-                id="auto-refresh"
-                checked={autoRefresh}
-                onCheckedChange={setAutoRefresh}
-              />
-              <Label htmlFor="auto-refresh" className="cursor-pointer text-sm text-muted-foreground">
-                Live
-              </Label>
-              {autoRefresh && (
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
-                </span>
-              )}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => loadOrders(activeTab === 'incoming' ? undefined : activeTab)}
-              disabled={isLoading}
-            >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            </Button>
-          </div>
+    <div className="space-y-6">
+      {/* Create Restaurant Button */}
+      <div className="flex justify-between items-center gap-3">
+        <div>
+          <h2 className="text-2xl font-bold">Restaurants</h2>
+          <p className="text-muted-foreground mt-1">Manage all restaurants and their staff accounts</p>
         </div>
+        <div className="flex gap-2">
+          <CreateAccountModal restaurants={restaurants} />
+          <Button onClick={() => setIsCreateDialogOpen(true)} className="gap-2">
+            <Plus className="w-4 h-4" />
+            New Restaurant
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="gap-2"
+          >
+            <LogOut className="w-4 h-4" />
+            {isLoggingOut ? 'Signing out...' : 'Sign Out'}
+          </Button>
+        </div>
+      </div>
 
-
-      {/* Orders Table */}
-      <Card>
-          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Orders</CardTitle>
-              <CardDescription>
-                View and manage all orders
-              </CardDescription>
-            </div>
-            <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:items-center">
-              <div className="flex w-full items-center gap-2 sm:w-auto">
-                <Label htmlFor="confirmation-code" className="sr-only">
-                  Confirmation Code
-                </Label>
-                <Input
-                  id="confirmation-code"
-                  placeholder="Search code"
-                  value={searchCode}
-                  onChange={e => {
-                    setSearchCode(e.target.value.toUpperCase())
-                    if (verifyError) setVerifyError(null)
-                    if (!e.target.value.trim()) setSearchResultId(null)
-                  }}
-                  onKeyDown={e => e.key === 'Enter' && handleVerifyCode()}
-                  className="w-full md:w-56"
-                  autoCapitalize="characters"
-                  autoComplete="off"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleVerifyCode}
-                  disabled={!searchCode.trim()}
-                >
-                  <Search className="w-4 h-4 mr-2" />
-                  Search
-                </Button>
-                {searchResultId && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setSearchResultId(null)
-                      setSearchCode('')
-                      setVerifyError(null)
-                    }}
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
-              {verifyError && (
-                <Alert variant="destructive" className="sm:ml-2">
-                  <AlertDescription>{verifyError}</AlertDescription>
-                </Alert>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="incoming">
-                  Incoming
-                  {incomingCount > 0 && (
-                    <Badge variant="secondary" className="ml-2">
-                      {incomingCount}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="completed">Completed</TabsTrigger>
-                <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value={activeTab} className="mt-4">
-                {isLoading ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-                    <RefreshCw className="w-8 h-8 animate-spin text-muted-foreground/50" />
-                    <p className="text-sm">Loading orders...</p>
-                  </div>
-                ) : displayedOrders.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-                    <Inbox className="w-12 h-12 text-muted-foreground/30" />
-                    <p className="text-sm">{searchResultId ? 'No matching order found' : 'No orders in this view'}</p>
-                  </div>
-                ) : (
-                  <ScrollArea className="h-[600px]">
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      {displayedOrders.map((order: any) => (
-                        <Card
-                          key={order.id}
-                          className={`overflow-hidden transition-all duration-200 hover:shadow-md ${
-                            order.status === 'awaiting_cashier_confirmation'
-                              ? 'border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-amber-950/10'
-                              : order.status === 'pending'
-                                ? 'border-blue-200 dark:border-blue-800'
-                                : ''
-                          }`}
-                        >
-                          <CardContent className="space-y-3 p-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="font-mono text-xl font-bold tracking-wider">
-                                  {order.confirmation_code}
-                                </p>
-                                <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-                                  <span>Table {order.tables?.table_number || 'N/A'}</span>
-                                  <span className="text-muted-foreground/40">&middot;</span>
-                                  <span>{format(new Date(order.created_at), 'MMM d, HH:mm')}</span>
-                                </div>
-                                {order.customer_name && (
-                                  <div className="mt-2 text-sm">
-                                    <span className="text-muted-foreground">Customer: </span>
-                                    <span className="font-medium text-foreground">{order.customer_name}</span>
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex flex-col gap-2 items-end">
-                                {getStatusBadge(order.status)}
-                                <Badge variant={order.customer_session_id ? 'secondary' : 'outline'}>
-                                  {order.customer_session_id ? 'Table Order' : 'Counter Order'}
-                                </Badge>
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
-                              <span className="text-sm text-muted-foreground">{(order as any).order_items?.length || '—'} items</span>
-                              <span className="text-lg font-bold tabular-nums">
-                                {formatCurrency(order.total_amount)}
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 px-3 text-xs"
-                                onClick={() => {
-                                  const found = orders.find((o: any) => o.id === order.id)
-                                  setSelectedOrder(found || order)
-                                }}
-                              >
-                                <Eye className="w-3.5 h-3.5 mr-1" />
-                                Details
-                              </Button>
-                              {order.status === 'awaiting_cashier_confirmation' && (
-                                <>
-                                  <Button
-                                    size="sm"
-                                    className="h-8 px-4 text-xs flex-1"
-                                    onClick={() => handleUpdateStatus(order.id, 'confirmed')}
-                                  >
-                                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                                    Confirm Payment
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-8 px-3 text-xs text-destructive hover:text-destructive"
-                                    onClick={() => handleUpdateStatus(order.id, 'cancelled')}
-                                  >
-                                    <XCircle className="w-3.5 h-3.5" />
-                                  </Button>
-                                </>
-                              )}
-                              {order.status === 'confirmed' && (
-                                <Button
-                                  size="sm"
-                                  className="h-8 px-4 text-xs flex-1"
-                                  onClick={() => handleUpdateStatus(order.id, 'completed')}
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                                  Mark Complete
-                                </Button>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                )}
-              </TabsContent>
-            </Tabs>
+      {/* Restaurants Grid */}
+      {restaurants.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Building2 className="w-12 h-12 mx-auto text-muted-foreground/40 mb-4" />
+            <p className="text-muted-foreground mb-4">No restaurants yet</p>
+            <Button onClick={() => setIsCreateDialogOpen(true)}>
+              Create your first restaurant
+            </Button>
           </CardContent>
         </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {restaurants.map(restaurant => (
+            <Card key={restaurant.id} className="hover:shadow-md transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="line-clamp-2">{restaurant.name}</CardTitle>
+                    <CardDescription className="text-xs text-muted-foreground/70 mt-1">
+                      Slug: <code className="bg-muted px-2 py-1 rounded">{restaurant.slug}</code>
+                    </CardDescription>
+                  </div>
+                  <Badge variant={restaurant.is_open ? 'default' : 'secondary'}>
+                    {restaurant.is_open ? 'Open' : 'Closed'}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {restaurant.description && (
+                  <p className="text-sm text-muted-foreground line-clamp-2">{restaurant.description}</p>
+                )}
+                
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  {restaurant.contact_number && (
+                    <div>📞 {restaurant.contact_number}</div>
+                  )}
+                  {restaurant.opening_hours && (
+                    <div>🕐 {restaurant.opening_hours}</div>
+                  )}
+                </div>
 
-      {/* Order Detail Dialog */}
-      <Dialog
-        open={!!selectedOrder}
-        onOpenChange={open => !open && setSelectedOrder(null)}
-      >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <Separator className="my-2" />
+
+                <div className="flex gap-2 flex-wrap">
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 gap-1"
+                  >
+                    <Link href={`/${restaurant.slug}/cashier`}>
+                      <Settings className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Cashier</span>
+                      <span className="sm:hidden">Admin</span>
+                    </Link>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                  >
+                    <a href={`/${restaurant.slug}/table/1`} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Preview
+                    </a>
+                  </Button>
+                </div>
+
+                <div className="text-xs text-muted-foreground/60 pt-1">
+                  Created {format(new Date(restaurant.created_at), 'MMM dd, yyyy')}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Create Restaurant Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Order Details</DialogTitle>
+            <DialogTitle>Create New Restaurant</DialogTitle>
             <DialogDescription>
-              Confirmation Code: {selectedOrder?.confirmation_code}
+              Set up a new restaurant on the platform. A unique slug will be auto-generated from the name.
             </DialogDescription>
           </DialogHeader>
 
-          {selectedOrder && (
-            <div className="space-y-5">
-              {/* Status + meta row */}
-              <div className="flex items-center justify-between">
-                {getStatusBadge(selectedOrder.status)}
-                <span className="text-xs text-muted-foreground">
-                  {format(new Date(selectedOrder.created_at), 'PPpp')}
-                </span>
-              </div>
+          <div className="space-y-4 py-4">
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            {success && (
+              <Alert className="bg-green-50 border-green-200">
+                <AlertDescription className="text-green-800">{success}</AlertDescription>
+              </Alert>
+            )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg bg-muted/50 p-3">
-                  <p className="text-xs text-muted-foreground mb-0.5">Table</p>
-                  <p className="text-lg font-semibold">
-                    {(selectedOrder as any).tables?.table_number || 'N/A'}
-                  </p>
-                </div>
-                <div className="rounded-lg bg-muted/50 p-3">
-                  <p className="text-xs text-muted-foreground mb-0.5">Total</p>
-                  <p className="text-lg font-bold tabular-nums">
-                    {formatCurrency(selectedOrder.total_amount)}
-                  </p>
-                </div>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="name">Restaurant Name *</Label>
+              <Input
+                id="name"
+                name="name"
+                placeholder="e.g., The Pizza Place"
+                value={formData.name}
+                onChange={handleInputChange}
+                disabled={isSubmitting}
+              />
+            </div>
 
-              {selectedOrder.customer_name && (
-                <div className="rounded-lg bg-muted/50 p-3">
-                  <p className="text-xs text-muted-foreground mb-0.5">Customer Name</p>
-                  <p className="text-lg font-semibold">
-                    {selectedOrder.customer_name}
-                  </p>
-                </div>
-              )}
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                name="description"
+                placeholder="Brief description of your restaurant..."
+                value={formData.description}
+                onChange={handleInputChange}
+                disabled={isSubmitting}
+                rows={3}
+              />
+            </div>
 
-              <Separator />
+            <div className="space-y-2">
+              <Label htmlFor="contactNumber">Contact Number</Label>
+              <Input
+                id="contactNumber"
+                name="contactNumber"
+                placeholder="e.g., +1 (555) 123-4567"
+                value={formData.contactNumber}
+                onChange={handleInputChange}
+                disabled={isSubmitting}
+              />
+            </div>
 
-              <div>
-                <p className="text-sm font-semibold mb-2">Items</p>
-                <div className="rounded-lg border divide-y">
-                  {(selectedOrder as any).order_items?.map((item: any) => (
-                    <div
-                      key={item.id}
-                      className="flex justify-between items-center px-3 py-2.5"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm">
-                          {item.menu_items?.name || 'Unknown Item'}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {item.quantity} &times; {formatCurrency(item.price)}
-                        </p>
-                      </div>
-                      <p className="font-semibold text-sm tabular-nums ml-3">
-                        {formatCurrency(item.quantity * item.price)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="openingHours">Opening Hours</Label>
+              <Input
+                id="openingHours"
+                name="openingHours"
+                placeholder="e.g., Mon-Fri: 10am-10pm, Sat-Sun: 12pm-11pm"
+                value={formData.openingHours}
+                onChange={handleInputChange}
+                disabled={isSubmitting}
+              />
+            </div>
 
-              <Separator />
-
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span className="tabular-nums">{formatCurrency(selectedOrder.subtotal)}</span>
-                </div>
-                {selectedOrder.discount_amount > 0 && (
-                  <div className="flex justify-between text-sm text-green-600">
-                    <span>Discount</span>
-                    <span className="tabular-nums">-{formatCurrency(selectedOrder.discount_amount)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between font-bold text-base pt-1">
-                  <span>Total</span>
-                  <span className="tabular-nums">{formatCurrency(selectedOrder.total_amount)}</span>
-                </div>
-              </div>
-
+            <div className="flex gap-3 pt-2">
               <Button
                 variant="outline"
-                onClick={() => setSelectedOrder(null)}
-                className="w-full"
+                onClick={() => setIsCreateDialogOpen(false)}
+                disabled={isSubmitting}
+                className="flex-1"
               >
-                Close
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateRestaurant}
+                disabled={isSubmitting}
+                className="flex-1"
+              >
+                {isSubmitting ? 'Creating...' : 'Create'}
               </Button>
             </div>
-          )}
+          </div>
         </DialogContent>
       </Dialog>
-
-      <CounterOrderForm
-        open={showCounterOrderModal}
-        onOpenChange={setShowCounterOrderModal}
-        tables={tables}
-        menuItems={menuItems}
-        onOrderCreated={() => loadOrders(activeTab === 'incoming' ? undefined : activeTab)}
-      />
     </div>
   )
 }

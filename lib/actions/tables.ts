@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { getRestaurantBySlug } from './restaurants'
 
 export async function getTableByNumber(tableNumber: string, restaurantId?: string) {
   const supabase = await createClient()
@@ -38,6 +39,28 @@ export async function getAllTables(restaurantId?: string) {
   }
 
   const { data, error } = await query
+
+  if (error) {
+    throw new Error(`Failed to fetch tables: ${error.message}`)
+  }
+
+  return data || []
+}
+
+export async function getTablesByRestaurantSlug(restaurantSlug: string) {
+  // Get restaurant to verify it exists and get its ID
+  const restaurant = await getRestaurantBySlug(restaurantSlug)
+  if (!restaurant) {
+    return []
+  }
+
+  const supabase = await createClient()
+  
+  const { data, error } = await supabase
+    .from('tables')
+    .select('*, restaurants(*)')
+    .eq('restaurant_id', restaurant.id)
+    .order('table_number', { ascending: true })
 
   if (error) {
     throw new Error(`Failed to fetch tables: ${error.message}`)

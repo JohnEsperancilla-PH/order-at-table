@@ -1,26 +1,65 @@
-import { getAllOrders, getMenuItems } from '@/lib/actions/orders'
-import { getTableByNumber } from '@/lib/actions/orders'
-import { getAllTables } from '@/lib/actions/tables'
-import { getSizesForMenuItems } from '@/lib/actions/sizes'
-import { AdminDashboardClient } from './admin-client'
+import Link from 'next/link'
+import { notFound, redirect } from 'next/navigation'
+import { getAllRestaurants } from '@/lib/actions/restaurants'
+import { getSession } from '@/lib/actions/auth'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { Building2, Plus, Settings } from 'lucide-react'
+import { PlatformAdminClient } from './admin-client'
 
-export default async function AdminPage() {
-  const [orders, tables, menuItems] = await Promise.all([
-    getAllOrders(),
-    getAllTables(),
-    getMenuItems('00000000-0000-0000-0000-000000000001', true), // Using seed restaurant ID
-  ])
+export default async function AdminDashboard() {
+  const session = await getSession()
 
-  // Load sizes for all menu items
-  const menuItemIds = menuItems.map((item: any) => item.id)
-  const sizesByMenuItem = await getSizesForMenuItems(menuItemIds)
+  if (!session) {
+    redirect('/admin/login')
+  }
 
-  // Attach sizes to menu items
-  const menuItemsWithSizes = menuItems.map((item: any) => ({
-    ...item,
-    sizes: sizesByMenuItem[item.id] || [],
-  }))
+  const restaurants = await getAllRestaurants()
 
-  return <AdminDashboardClient initialOrders={orders} tables={tables} menuItems={menuItemsWithSizes} />
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 p-6">
+      <div className="max-w-6xl mx-auto space-y-8">
+        {/* Header */}
+        <div className="space-y-2">
+          <h1 className="text-4xl font-bold tracking-tight">Platform Admin</h1>
+          <p className="text-muted-foreground">Manage restaurants, staff accounts, and platform settings</p>
+        </div>
+
+        <Separator />
+
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total Restaurants</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{restaurants.length}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Active Restaurants</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{restaurants.filter(r => r.is_open).length}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Closed Restaurants</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{restaurants.filter(r => !r.is_open).length}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Main Client Component */}
+        <PlatformAdminClient initialRestaurants={restaurants} />
+      </div>
+    </div>
+  )
 }
-

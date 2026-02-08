@@ -8,28 +8,43 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 
-export function AdminLayout({ children }: { children: React.ReactNode }) {
+interface AdminLayoutProps {
+  children: React.ReactNode
+  restaurantSlug?: string
+}
+
+export function AdminLayout({ children, restaurantSlug }: AdminLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
 
-  if (pathname === '/admin/login') {
+  // Handle login page bypass
+  const isLoginPage = restaurantSlug 
+    ? pathname === `/${restaurantSlug}/cashier/login`
+    : pathname === '/admin/login'
+
+  if (isLoginPage) {
     return <>{children}</>
   }
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
-    router.replace('/admin/login')
+    const redirectTo = restaurantSlug
+      ? `/${restaurantSlug}/cashier/login`
+      : '/admin/login'
+    router.replace(redirectTo)
   }
+
+  const homeLink = restaurantSlug ? `/${restaurantSlug}/cashier` : '/admin'
 
   return (
     <SidebarProvider>
-      <AdminSidebar />
+      <AdminSidebar restaurantSlug={restaurantSlug} />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
-          <Link href="/admin" className="text-lg font-semibold">
+          <Link href={homeLink} className="text-lg font-semibold">
             Order at Table
           </Link>
           <div className="ml-auto">

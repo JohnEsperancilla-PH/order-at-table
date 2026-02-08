@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { getRestaurantBySlug } from './restaurants'
 
 export async function getTable(tableId: string) {
   const supabase = await createClient()
@@ -42,6 +43,31 @@ export async function getTableByNumber(tableNumber: string, restaurantId?: strin
   return data
 }
 
+export async function getTableByRestaurantSlugAndNumber(restaurantSlug: string, tableNumber: string) {
+  // First get the restaurant to get its ID
+  const restaurant = await getRestaurantBySlug(restaurantSlug)
+  
+  if (!restaurant) {
+    throw new Error('Restaurant not found')
+  }
+
+  const supabase = await createClient()
+  
+  const { data, error } = await supabase
+    .from('tables')
+    .select('*, restaurants(*)')
+    .eq('restaurant_id', restaurant.id)
+    .eq('table_number', tableNumber)
+    .eq('is_active', true)
+    .single()
+
+  if (error || !data) {
+    throw new Error(`Table not found for restaurant: ${error?.message || 'No active table found'}`)
+  }
+
+  return data
+}
+
 export async function getMenuItems(restaurantId: string, includeUnavailable = false) {
   const supabase = await createClient()
   
@@ -71,6 +97,63 @@ export async function getMenuCategories(restaurantId: string, includeInactive = 
     .from('menu_categories')
     .select('*')
     .eq('restaurant_id', restaurantId)
+    .order('display_order', { ascending: true })
+
+  if (!includeInactive) {
+    query = query.eq('is_active', true)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    throw new Error(`Failed to fetch categories: ${error.message}`)
+  }
+
+  return data || []
+}
+
+// Slug-based menu functions for cashier/admin
+export async function getMenuItemsByRestaurantSlug(restaurantSlug: string, includeUnavailable = false) {
+  // Get restaurant to verify it exists and get its ID
+  const restaurant = await getRestaurantBySlug(restaurantSlug)
+  if (!restaurant) {
+    return []
+  }
+
+  const supabase = await createClient()
+  
+  let query = supabase
+    .from('menu_items')
+    .select('*, menu_categories(*)')
+    .eq('restaurant_id', restaurant.id)
+    .order('display_order', { ascending: true })
+
+  if (!includeUnavailable) {
+    query = query.eq('is_available', true)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    throw new Error(`Failed to fetch menu: ${error.message}`)
+  }
+
+  return data || []
+}
+
+export async function getMenuCategoriesByRestaurantSlug(restaurantSlug: string, includeInactive = false) {
+  // Get restaurant to verify it exists and get its ID
+  const restaurant = await getRestaurantBySlug(restaurantSlug)
+  if (!restaurant) {
+    return []
+  }
+
+  const supabase = await createClient()
+
+  let query = supabase
+    .from('menu_categories')
+    .select('*')
+    .eq('restaurant_id', restaurant.id)
     .order('display_order', { ascending: true })
 
   if (!includeInactive) {
@@ -364,16 +447,20 @@ export async function createOrder(
       })
   }
 
-  // Get table number for revalidation
-  const { data: tableData } = await supabase
+  // Get table number and restaurant slug for revalidation
+  const { data: tableAndRestaurantData } = await supabase
     .from('tables')
-    .select('table_number')
+    .select('table_number, restaurants(slug)')
     .eq('id', tableId)
     .single()
   
-  if (tableData) {
-    revalidatePath(`/table/${tableData.table_number}/order`)
-    revalidatePath(`/table/${tableData.table_number}/orders/${order.id}/${order.status}`)
+  if (tableAndRestaurantData) {
+    const slug = (tableAndRestaurantData.restaurants as any)?.slug
+    const tableNumber = tableAndRestaurantData.table_number
+    if (slug && tableNumber) {
+      revalidatePath(`/${slug}/table/${tableNumber}/order`)
+      revalidatePath(`/${slug}/table/${tableNumber}/orders/${order.id}/${order.status}`)
+    }
   }
   revalidatePath('/admin')
   return order
@@ -483,6 +570,69 @@ export async function getOrdersByStatus(
   }
 
   const { data, error } = await query
+
+  if (error) {
+    throw new Error(`Failed to fetch orders: ${error.message}`)
+  }
+
+  return data || []
+}
+
+// Helper functions for slug-based queries
+export async function getAllOrdersByRestaurantSlug(restaurantSlug: string) {
+  // Get restaurant to verify it exists and get its ID
+  const restaurant = await getRestaurantBySlug(restaurantSlug)
+  if (!restaurant) {
+    return []
+  }
+
+  const supabase = await createClient()
+  
+  const { data, error } = await supabase
+    .from('orders')
+    .select(`
+      *,
+      tables (*),
+      order_items (
+        *,
+        menu_items (*)
+      )
+    `)
+    .eq('restaurant_id', restaurant.id)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    throw new Error(`Failed to fetch orders: ${error.message}`)
+  }
+
+  return data || []
+}
+
+export async function getOrdersByStatusAndRestaurantSlug(
+  status: string,
+  restaurantSlug: string
+) {
+  // Get restaurant to verify it exists and get its ID
+  const restaurant = await getRestaurantBySlug(restaurantSlug)
+  if (!restaurant) {
+    return []
+  }
+
+  const supabase = await createClient()
+  
+  const { data, error } = await supabase
+    .from('orders')
+    .select(`
+      *,
+      tables (*),
+      order_items (
+        *,
+        menu_items (*)
+      )
+    `)
+    .eq('status', status)
+    .eq('restaurant_id', restaurant.id)
+    .order('created_at', { ascending: false })
 
   if (error) {
     throw new Error(`Failed to fetch orders: ${error.message}`)

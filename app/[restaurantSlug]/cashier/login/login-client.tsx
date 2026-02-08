@@ -1,29 +1,44 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { login } from '@/lib/actions/auth'
-import { LogIn } from 'lucide-react'
+import { loginStaffAccount } from '@/lib/actions/staff'
+import { LogIn, Loader2 } from 'lucide-react'
 
-export default function AdminLoginPage() {
+interface AdminLoginClientProps {
+  restaurantSlug: string
+}
+
+export function AdminLoginClient({ restaurantSlug }: AdminLoginClientProps) {
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
     setIsLoading(true)
+    setError(null)
 
     try {
-      await login(email, password)
+      const account = await loginStaffAccount(restaurantSlug, email, password)
+      
+      // Store account info in session storage and set cookie for middleware
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(`staff_account_${restaurantSlug}`, JSON.stringify(account))
+        // Set cookie so middleware allows access to cashier routes
+        document.cookie = `staff_session_${restaurantSlug}=${account.id}; path=/; max-age=86400`
+      }
+
+      router.replace(`/${restaurantSlug}/cashier`)
     } catch (err: any) {
-      setError(err.message || 'Failed to log in')
+      setError(err.message || 'Invalid email or password')
       setIsLoading(false)
     }
   }
@@ -37,8 +52,8 @@ export default function AdminLoginPage() {
               <LogIn className="h-6 w-6 text-primary-foreground" />
             </div>
           </div>
-          <CardTitle className="text-2xl">Platform Admin</CardTitle>
-          <CardDescription>Sign in to manage restaurants and staff</CardDescription>
+          <CardTitle className="text-2xl">Staff Sign In</CardTitle>
+          <CardDescription>Enter your credentials to access the dashboard</CardDescription>
         </CardHeader>
         <CardContent>
           {error && (
@@ -47,17 +62,18 @@ export default function AdminLoginPage() {
             </Alert>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@example.com"
+                placeholder="staff@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(event) => setEmail(event.target.value)}
                 disabled={isLoading}
                 required
+                autoComplete="email"
               />
             </div>
 
@@ -68,20 +84,24 @@ export default function AdminLoginPage() {
                 type="password"
                 placeholder="••••••••"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(event) => setPassword(event.target.value)}
                 disabled={isLoading}
                 required
+                autoComplete="current-password"
               />
             </div>
 
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Signing in...' : 'Sign In'}
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                'Sign In'
+              )}
             </Button>
           </form>
-
-          <p className="text-xs text-muted-foreground text-center mt-4">
-            Contact your administrator for login credentials
-          </p>
         </CardContent>
       </Card>
     </div>

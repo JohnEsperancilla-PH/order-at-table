@@ -5,7 +5,8 @@ import { revalidatePath } from 'next/cache'
 
 export async function toggleMenuItemAvailability(
   menuItemId: string,
-  isAvailable: boolean
+  isAvailable: boolean,
+  restaurantSlug?: string
 ) {
   const supabase = await createClient()
 
@@ -28,6 +29,9 @@ export async function toggleMenuItemAvailability(
       is_available: isAvailable,
     })
 
+  if (restaurantSlug) {
+    revalidatePath(`/${restaurantSlug}/cashier/menu`)
+  }
   revalidatePath('/admin')
   return data
 }
@@ -41,7 +45,8 @@ export async function createMenuItem(
     category_id: string
     is_available?: boolean
     image_url?: string | null
-  }
+  },
+  restaurantSlug?: string
 ) {
   const supabase = await createClient()
 
@@ -74,6 +79,9 @@ export async function createMenuItem(
     throw new Error(`Failed to create menu item: ${error.message}`)
   }
 
+  if (restaurantSlug) {
+    revalidatePath(`/${restaurantSlug}/cashier/menu`)
+  }
   revalidatePath('/admin/menu')
   return createdItem
 }
@@ -102,6 +110,8 @@ export async function updateMenuItem(
     throw new Error(`Failed to update menu item: ${error.message}`)
   }
 
+  // Revalidate all dynamic menu paths
+  revalidatePath('/[restaurantSlug]/cashier/menu', 'page')
   revalidatePath('/admin/menu')
   return data
 }
@@ -118,13 +128,16 @@ export async function deleteMenuItem(menuItemId: string) {
     throw new Error(`Failed to delete menu item: ${error.message}`)
   }
 
+  // Revalidate all dynamic menu paths
+  revalidatePath('/[restaurantSlug]/cashier/menu', 'page')
   revalidatePath('/admin/menu')
 }
 
 export async function createMenuCategory(
   restaurantId: string,
   name: string,
-  description?: string | null
+  description?: string | null,
+  restaurantSlug?: string
 ) {
   const supabase = await createClient()
 
@@ -154,13 +167,17 @@ export async function createMenuCategory(
     throw new Error(`Failed to create category: ${error.message}`)
   }
 
+  if (restaurantSlug) {
+    revalidatePath(`/${restaurantSlug}/cashier/menu`)
+  }
   revalidatePath('/admin/menu')
   return data
 }
 
 export async function updateMenuCategory(
   categoryId: string,
-  updates: { name?: string; description?: string | null; is_active?: boolean }
+  updates: { name?: string; description?: string | null; is_active?: boolean },
+  restaurantSlug?: string
 ) {
   const supabase = await createClient()
 
@@ -175,6 +192,8 @@ export async function updateMenuCategory(
     throw new Error(`Failed to update category: ${error.message}`)
   }
 
+  // Revalidate all dynamic menu paths
+  revalidatePath('/[restaurantSlug]/cashier/menu', 'page')
   revalidatePath('/admin/menu')
   return data
 }
@@ -208,6 +227,8 @@ export async function deleteMenuCategory(categoryId: string) {
     throw new Error(`Failed to delete category: ${error.message}`)
   }
 
+  // Revalidate all dynamic menu paths
+  revalidatePath('/[restaurantSlug]/cashier/menu', 'page')
   revalidatePath('/admin/menu')
 }
 
