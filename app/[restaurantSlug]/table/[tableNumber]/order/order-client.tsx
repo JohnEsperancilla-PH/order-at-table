@@ -265,16 +265,13 @@ export function OrderPageClient({
   }
 
   return (
-    <div
-      className={`min-h-screen bg-gradient-to-b from-background to-muted/20 ${
-        isMobile ? 'pb-24' : ''
-      }`}
-    >
-      <div className="max-w-7xl mx-auto p-4 space-y-6">
-        {/* Hero with restaurant info overlay */}
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 pb-24">
+      {/* Force 9:16 vertical layout with max width */}
+      <div className="max-w-md mx-auto p-4 space-y-6">
+        {/* Hero with restaurant info overlay - mobile-optimized aspect ratio */}
         <div className="relative overflow-hidden rounded-2xl">
           <div
-            className="aspect-[21/9] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+            className="aspect-[16/9] w-full bg-gradient-to-br from-primary/20 to-primary/5"
             style={table.restaurants?.cover_image_url ? {
               backgroundImage: `url(${table.restaurants.cover_image_url})`,
               backgroundSize: 'cover',
@@ -282,8 +279,8 @@ export function OrderPageClient({
             } : undefined}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-          <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
-            <h1 className="text-2xl sm:text-3xl font-bold drop-shadow-md">
+          <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+            <h1 className="text-xl sm:text-2xl font-bold drop-shadow-md">
               {table.restaurants?.name || 'Sample Restaurant'}
             </h1>
             <p className="text-white/80 text-sm mt-1">
@@ -293,184 +290,57 @@ export function OrderPageClient({
         </div>
 
         {customerName && (
-          <p className="text-2xl font-bold text-foreground mb-6">
-            Welcome, {customerName}!
-          </p>
+          <div className="text-center py-2">
+            <p className="text-xl font-bold text-foreground">
+              Welcome, {customerName}!
+            </p>
+          </div>
         )}
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Menu Section */}
-          <div className="lg:col-span-2 space-y-4">
-            {addedMessage && (
-              <div className="fixed top-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 animate-in slide-in-from-top-2 fade-in duration-200">
-                <div className="flex items-center gap-3 bg-primary text-primary-foreground px-4 py-3 rounded-xl shadow-lg">
-                  <CheckCircle2 className="w-5 h-5 shrink-0" />
-                  <span className="text-sm font-medium">{addedMessage}</span>
-                </div>
+        {/* Single column layout for all screen sizes */}
+        <div className="space-y-4">
+          {addedMessage && (
+            <div className="fixed top-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 animate-in slide-in-from-top-2 fade-in duration-200">
+              <div className="flex items-center gap-3 bg-primary text-primary-foreground px-4 py-3 rounded-xl shadow-lg">
+                <CheckCircle2 className="w-5 h-5 shrink-0" />
+                <span className="text-sm font-medium">{addedMessage}</span>
               </div>
-            )}
-
-            {/* Menu Items by Category */}
-            <MenuAccordion
-              categories={categories}
-              menuItems={filteredItems}
-              cart={cart}
-              onAddToCart={addToCart}
-              onUpdateQuantity={updateQuantity}
-            />
-          </div>
-
-          {/* Cart Section */}
-          {!isMobile && (
-            <div className="lg:col-span-1">
-            <Card className="sticky top-4">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <ShoppingCart className="w-5 h-5" />
-                    <span>Cart</span>
-                  </div>
-                  {cartItemCount > 0 && (
-                    <Badge variant="secondary" className="text-xs">
-                      {cartItemCount} {cartItemCount === 1 ? 'item' : 'items'}
-                    </Badge>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {cart.length === 0 ? (
-                  <div className="text-center py-10 space-y-3">
-                    <ShoppingBag className="w-12 h-12 mx-auto text-muted-foreground/40" />
-                    <p className="text-muted-foreground text-sm">Your cart is empty</p>
-                    <p className="text-muted-foreground/60 text-xs">Add items from the menu to get started</p>
-                  </div>
-                ) : (
-                  <>
-                    <ScrollArea className="h-[400px]">
-                      <div className="space-y-1">
-                        {cart.map((item, idx) => {
-                          const itemPrice = item.size ? item.menu_item.price + item.size.price_modifier : item.menu_item.price
-                          const lineTotal = itemPrice * item.quantity
-                          const cartKey = `${item.menu_item.id}-${item.size_id || 'nosize'}`
-                          
-                          return (
-                            <div
-                              key={cartKey}
-                              className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors group"
-                            >
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium text-sm leading-tight">
-                                  {item.menu_item.name}
-                                </p>
-                                {item.size && (
-                                  <p className="text-[11px] text-primary font-medium">
-                                    {item.size.name}
-                                  </p>
-                                )}
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  {formatCurrency(itemPrice)} &times; {item.quantity} = <span className="font-semibold text-foreground">{formatCurrency(lineTotal)}</span>
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  size="icon"
-                                  variant="outline"
-                                  className="h-7 w-7 rounded-full"
-                                  aria-label={`Decrease quantity for ${item.menu_item.name}`}
-                                  onClick={() =>
-                                    updateQuantity(
-                                      item.menu_item.id,
-                                      item.quantity - 1,
-                                      item.size_id
-                                    )
-                                  }
-                                >
-                                  <Minus className="w-3 h-3" />
-                                </Button>
-                                <span className="w-6 text-center text-sm font-semibold tabular-nums">
-                                  {item.quantity}
-                                </span>
-                                <Button
-                                  size="icon"
-                                  variant="outline"
-                                  className="h-7 w-7 rounded-full"
-                                  aria-label={`Increase quantity for ${item.menu_item.name}`}
-                                  onClick={() =>
-                                    updateQuantity(
-                                      item.menu_item.id,
-                                      item.quantity + 1,
-                                      item.size_id
-                                    )
-                                  }
-                                >
-                                  <Plus className="w-3 h-3" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-7 w-7 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                                  aria-label={`Remove ${item.menu_item.name} from cart`}
-                                  onClick={() => removeFromCart(item.menu_item.id, item.size_id)}
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </ScrollArea>
-                    <Separator />
-                    <div className="space-y-1.5 pt-1">
-                      <div className="flex justify-between text-sm text-muted-foreground">
-                        <span>{cartItemCount} {cartItemCount === 1 ? 'item' : 'items'}</span>
-                        <span>{formatCurrency(subtotal)}</span>
-                      </div>
-                      <div className="flex justify-between font-bold text-lg">
-                        <span>Total</span>
-                        <span>{formatCurrency(subtotal)}</span>
-                      </div>
-                    </div>
-                    <Button
-                      className="w-full rounded-xl transition-transform active:scale-[0.98]"
-                      size="lg"
-                      onClick={handleOpenConfirm}
-                      disabled={cart.length === 0 || isSubmitting}
-                    >
-                      Confirm Order &middot; {formatCurrency(subtotal)}
-                    </Button>
-                  </>
-                )}
-              </CardContent>
-            </Card>
             </div>
           )}
+
+          {/* Menu Items by Category - Mobile-optimized */}
+          <MenuAccordion
+            categories={categories}
+            menuItems={filteredItems}
+            cart={cart}
+            onAddToCart={addToCart}
+            onUpdateQuantity={updateQuantity}
+          />
         </div>
       </div>
 
-      {isMobile && (
-        <>
-          <div className="fixed bottom-0 left-0 right-0 z-40 p-3 bg-background/80 backdrop-blur-lg border-t safe-bottom">
-            <Button
-              className="w-full rounded-xl h-12 text-base transition-transform active:scale-[0.98]"
-              size="lg"
-              onClick={() => setIsCartOpen(true)}
-              disabled={cartItemCount === 0}
-            >
-              <ShoppingCart className="w-5 h-5 mr-2" />
-              {cartItemCount > 0 ? (
-                <span className="flex items-center gap-2">
-                  View Cart ({cartItemCount})
-                  <span className="text-primary-foreground/70">&middot;</span>
-                  <span>{formatCurrency(subtotal)}</span>
-                </span>
-              ) : (
-                'Cart is empty'
-              )}
-            </Button>
-          </div>
+      {/* Fixed cart button for all screen sizes - 9:16 optimized */}
+      <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2 z-40 p-3 w-full max-w-md bg-background/90 backdrop-blur-lg border-t">
+        <Button
+          className="w-full rounded-xl h-12 text-base transition-transform active:scale-[0.98] shadow-lg"
+          size="lg"
+          onClick={() => setIsCartOpen(true)}
+          disabled={cartItemCount === 0}
+        >
+          <ShoppingCart className="w-5 h-5 mr-2" />
+          {cartItemCount > 0 ? (
+            <span className="flex items-center gap-2">
+              View Cart ({cartItemCount})
+              <span className="text-primary-foreground/70">&middot;</span>
+              <span>{formatCurrency(subtotal)}</span>
+            </span>
+          ) : (
+            'Cart is empty'
+          )}
+        </Button>
+      </div>
           <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
-            <SheetContent side="bottom" className="max-h-[85vh] rounded-t-2xl !h-auto">
+            <SheetContent side="bottom" className="max-h-[85vh] rounded-t-2xl !h-auto max-w-md mx-auto">
               <SheetHeader>
                 <SheetTitle className="flex items-center gap-2">
                   <span>Your Cart</span>
@@ -584,8 +454,6 @@ export function OrderPageClient({
               </div>
             </SheetContent>
           </Sheet>
-        </>
-      )}
 
       {/* Confirm Order Dialog */}
       <Dialog
@@ -719,21 +587,26 @@ export function OrderConfirmationView({
   const displayTable = tableNumber || (order as any)?.tables?.table_number || 'N/A'
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-b from-background to-muted/20 px-4 pb-6">
-      <div className="max-w-md mx-auto pt-4 space-y-3">
-        {/* Compact hero */}
+    <div className="min-h-[100dvh] bg-gradient-to-b from-background to-muted/20 pb-6">
+      {/* Force 9:16 vertical layout */}
+      <div className="max-w-md mx-auto p-4 space-y-4">
+        {/* Compact hero - mobile optimized */}
         <div className="relative overflow-hidden rounded-xl">
           <div
-            className="aspect-[21/9] w-full bg-gradient-to-br from-primary/20 to-primary/5"
-            style={coverImageUrl ? { backgroundImage: `url(${coverImageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
+            className="aspect-[16/9] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+            style={coverImageUrl ? { 
+              backgroundImage: `url(${coverImageUrl})`, 
+              backgroundSize: 'cover', 
+              backgroundPosition: 'center' 
+            } : undefined}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
           <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
             <h1 className="text-xl font-bold drop-shadow-md">
               {displayRestaurant}
             </h1>
-            <p className="text-white/80 text-xs mt-0.5">
-              You are seated at Table {displayTable}
+            <p className="text-white/80 text-sm mt-0.5">
+              Table {displayTable}
             </p>
           </div>
         </div>
@@ -746,7 +619,7 @@ export function OrderConfirmationView({
             <div className="space-y-1">
               <h2 className="text-xl font-bold">Order Placed!</h2>
               <p className="text-sm text-muted-foreground leading-snug">
-                Your order has been submitted successfully. Show this code at the cashier.
+                Show this code at the cashier to complete your payment.
               </p>
             </div>
 
@@ -754,17 +627,17 @@ export function OrderConfirmationView({
               <p className="text-xs text-muted-foreground mb-1">
                 Confirmation Code
               </p>
-              <p className="text-2xl font-bold tracking-wider">
+              <p className="text-2xl font-bold tracking-wider font-mono">
                 {order.confirmation_code}
               </p>
             </div>
 
             <p className="text-xs text-muted-foreground leading-relaxed">
               {isCompleted
-                ? 'Your order is coming your way. Enjoy!'
+                ? 'Your order is ready! Enjoy your meal.'
                 : isConfirmed
                   ? 'Payment confirmed. Your order is being prepared.'
-                  : 'Please show this code to the cashier to complete your payment.'}
+                  : 'Please show this code to complete your payment.'}
             </p>
 
             <Separator />
@@ -783,7 +656,7 @@ export function OrderConfirmationView({
                     <RefreshCw 
                       className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} 
                     />
-                    <span>Live updates on</span>
+                    <span>Live updates</span>
                   </div>
                 )}
               </div>
@@ -794,14 +667,16 @@ export function OrderConfirmationView({
                 {onStartNewOrder && (
                   <Button
                     variant="outline"
-                    className="rounded-xl"
+                    className="rounded-xl h-11"
                     onClick={onStartNewOrder}
                   >
                     Start a New Order
                   </Button>
                 )}
                 {onClose && (
-                  <Button className="rounded-xl" onClick={onClose}>Close</Button>
+                  <Button className="rounded-xl h-11" onClick={onClose}>
+                    Close
+                  </Button>
                 )}
               </div>
             )}

@@ -11,8 +11,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Order at Table",
-  description: "QR-based ordering system for restaurants",
+  title: "QRDer - Scan. Order. Savor.",
+  description: "Transform your restaurant with seamless QR-based ordering. No apps, no waiting, just better service for everyone.",
 };
 
 export default function RootLayout({

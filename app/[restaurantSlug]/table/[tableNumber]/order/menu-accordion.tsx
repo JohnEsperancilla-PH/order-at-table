@@ -146,7 +146,7 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
                     </CardContent>
                   </Card>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-3">
                     {items.map(item => {
                       const inCartQty = getCartQuantityForItem(item.id)
                       const hasSizes = (item.sizes || []).length > 0
@@ -158,92 +158,100 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
                             item.is_available ? '' : 'opacity-50 grayscale'
                           }`}
                         >
-                          {/* Image with cart quantity overlay */}
-                          {item.image_url ? (
-                            <div className="relative w-full overflow-hidden bg-muted">
-                              <img
-                                src={item.image_url}
-                                alt={item.name}
-                                className="h-40 w-full object-cover transition-transform duration-300 hover:scale-105"
-                                loading="lazy"
-                              />
-                              {inCartQty > 0 && (
-                                <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center shadow-lg">
-                                  {inCartQty}
-                                </div>
-                              )}
-                              {!item.is_available && (
-                                <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
-                                  <Badge variant="secondary" className="text-sm">Sold Out</Badge>
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            inCartQty > 0 && (
-                              <div className="flex justify-end px-3 pt-2">
-                                <div className="bg-primary text-primary-foreground text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
-                                  {inCartQty}
-                                </div>
-                              </div>
-                            )
-                          )}
-
-                          <CardHeader className={`px-3 pb-1 ${item.image_url ? 'pt-3' : inCartQty > 0 ? 'pt-1' : 'pt-3'}`}>
-                            <CardTitle className="text-lg font-semibold leading-snug line-clamp-2">{item.name}</CardTitle>
-                            {item.description && (
-                              <CardDescription className="text-xs line-clamp-2 !mt-0.5">
-                                {item.description}
-                              </CardDescription>
-                            )}
-                          </CardHeader>
-
-                          <CardContent className="px-3 pt-0 pb-3">
-                            <div className="flex justify-between items-end gap-2">
-                              <div className="min-w-0">
-                                <span className="text-xl font-bold leading-tight">
-                                  {calculatePriceRange(item)}
-                                </span>
-                                {hasSizes && (
-                                  <p className="text-[10px] text-muted-foreground leading-tight">Tap to choose size</p>
+                          {/* Horizontal layout for 9:16 optimization */}
+                          <div className="flex gap-3 p-3">
+                            {/* Compact image */}
+                            {item.image_url && (
+                              <div className="relative w-16 h-16 overflow-hidden bg-muted rounded-lg shrink-0">
+                                <img
+                                  src={item.image_url}
+                                  alt={item.name}
+                                  className="h-full w-full object-cover"
+                                  loading="lazy"
+                                />
+                                {inCartQty > 0 && (
+                                  <div className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-lg">
+                                    {inCartQty}
+                                  </div>
+                                )}
+                                {!item.is_available && (
+                                  <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
+                                    <span className="text-xs font-medium">Sold Out</span>
+                                  </div>
                                 )}
                               </div>
+                            )}
 
-                              {/* Quantity stepper for no-size items already in cart */}
-                              {!hasSizes && inCartQty > 0 ? (
-                                <div className="flex items-center gap-1.5">
-                                  <Button
-                                    size="icon"
-                                    variant="outline"
-                                    className="h-8 w-8 rounded-full"
-                                    onClick={() => onUpdateQuantity(item.id, inCartQty - 1, null)}
-                                  >
-                                    <Minus className="w-3 h-3" />
-                                  </Button>
-                                  <span className="w-6 text-center text-sm font-semibold">
-                                    {inCartQty}
-                                  </span>
-                                  <Button
-                                    size="icon"
-                                    variant="default"
-                                    className="h-8 w-8 rounded-full"
-                                    onClick={() => onAddToCart(item, null)}
-                                  >
-                                    <Plus className="w-3 h-3" />
-                                  </Button>
+                            {/* Content area */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-semibold text-sm leading-tight mb-1 line-clamp-1">{item.name}</h4>
+                                  {item.description && (
+                                    <p className="text-xs text-muted-foreground leading-snug mb-2 line-clamp-1">
+                                      {item.description}
+                                    </p>
+                                  )}
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <span className="text-sm font-bold text-primary">
+                                        {calculatePriceRange(item)}
+                                      </span>
+                                      {hasSizes && (
+                                        <p className="text-[10px] text-muted-foreground">Choose size</p>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleAddToCart(item)}
-                                  disabled={!item.is_available}
-                                  className="rounded-full px-4 transition-transform active:scale-95"
-                                >
-                                  <Plus className="w-4 h-4 mr-1" />
-                                  Add
-                                </Button>
+
+                                {/* Add/quantity controls */}
+                                <div className="shrink-0">
+                                  {!hasSizes && inCartQty > 0 ? (
+                                    <div className="flex items-center gap-1">
+                                      <Button
+                                        size="icon"
+                                        variant="outline"
+                                        className="h-7 w-7 rounded-full"
+                                        onClick={() => onUpdateQuantity(item.id, inCartQty - 1, null)}
+                                      >
+                                        <Minus className="w-3 h-3" />
+                                      </Button>
+                                      <span className="w-4 text-center text-xs font-semibold tabular-nums">
+                                        {inCartQty}
+                                      </span>
+                                      <Button
+                                        size="icon"
+                                        variant="default"
+                                        className="h-7 w-7 rounded-full"
+                                        onClick={() => onAddToCart(item, null)}
+                                      >
+                                        <Plus className="w-3 h-3" />
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleAddToCart(item)}
+                                      disabled={!item.is_available}
+                                      className="rounded-full px-3 h-7 text-xs transition-transform active:scale-95"
+                                    >
+                                      <Plus className="w-3 h-3 mr-1" />
+                                      Add
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Show cart controls if no image and has cart items */}
+                              {!item.image_url && inCartQty > 0 && (
+                                <div className="flex items-center justify-between mt-2 pt-2 border-t border-muted/50">
+                                  <span className="text-xs text-muted-foreground">
+                                    {inCartQty} in cart
+                                  </span>
+                                </div>
                               )}
                             </div>
-                          </CardContent>
+                          </div>
                         </Card>
                       )
                     })}
@@ -256,31 +264,31 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
       </Accordion>
 
       <Sheet open={isSizeSheetOpen} onOpenChange={setIsSizeSheetOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl px-6 pb-6 pt-5">
+        <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-6 pt-5 max-w-md mx-auto">
           <SheetHeader className="mb-5 px-0">
             <SheetTitle className="text-left text-lg">{selectedItem?.name}</SheetTitle>
             {selectedItem?.description && (
-              <SheetDescription className="text-left">
+              <SheetDescription className="text-left text-sm">
                 {selectedItem.description}
               </SheetDescription>
             )}
           </SheetHeader>
 
-          <div className="space-y-6">
-            {/* Item image preview */}
+          <div className="space-y-5">
+            {/* Compact item image preview */}
             {selectedItem?.image_url && (
               <div className="rounded-xl overflow-hidden">
                 <img
                   src={selectedItem.image_url}
                   alt={selectedItem.name}
-                  className="h-36 w-full object-cover"
+                  className="h-24 w-full object-cover"
                 />
               </div>
             )}
 
             <div>
               <p className="text-sm font-semibold mb-3">Choose a size</p>
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 {selectedItem?.sizes?.map((size: any) => {
                   const isSelected = selectedSize === size.id
                   const cartEntry = selectedItem ? getCartEntry(selectedItem.id, size.id) : undefined
@@ -289,7 +297,7 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
                     <button
                       key={size.id}
                       onClick={() => setSelectedSize(size.id)}
-                      className={`w-full px-4 py-3.5 rounded-xl border-2 transition-all duration-150 text-left active:scale-[0.98] ${
+                      className={`w-full px-3 py-3 rounded-lg border-2 transition-all duration-150 text-left active:scale-[0.98] ${
                         isSelected
                           ? 'border-primary bg-primary/5 shadow-sm'
                           : 'border-border hover:border-primary/40 hover:bg-muted/50'
@@ -297,13 +305,13 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
                     >
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-3">
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${
                             isSelected ? 'border-primary bg-primary' : 'border-muted-foreground/30'
                           }`}>
-                            {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
+                            {isSelected && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
                           </div>
                           <div>
-                            <span className="font-medium">{size.name}</span>
+                            <span className="font-medium text-sm">{size.name}</span>
                             {cartEntry && (
                               <span className="ml-2 text-xs text-primary font-medium">
                                 {cartEntry.quantity} in cart
@@ -311,7 +319,7 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
                             )}
                           </div>
                         </div>
-                        <span className="font-bold tabular-nums">
+                        <span className="font-bold tabular-nums text-sm">
                           {formatCurrency(selectedItem.price + size.price_modifier)}
                         </span>
                       </div>
@@ -321,18 +329,18 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
               </div>
             </div>
 
-            <div className="flex gap-3 pt-1">
+            <div className="flex gap-3 pt-2">
               <Button
                 variant="outline"
                 onClick={() => setIsSizeSheetOpen(false)}
-                className="flex-1 rounded-xl h-12"
+                className="flex-1 rounded-xl h-11"
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleConfirmSize}
                 disabled={!selectedSize}
-                className="flex-1 rounded-xl h-12 transition-transform active:scale-[0.97]"
+                className="flex-1 rounded-xl h-11 transition-transform active:scale-[0.97]"
               >
                 <ShoppingBag className="w-4 h-4 mr-2" />
                 Add{selectedSize ? ` · ${getSizePriceDisplay(selectedItem, selectedSize)}` : ''}
