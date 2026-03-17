@@ -47,6 +47,30 @@ export async function getAllTables(restaurantId?: string) {
   return data || []
 }
 
+export async function getFirstTableNumbersByRestaurantIds(
+  restaurantIds: string[]
+): Promise<Record<string, string>> {
+  if (restaurantIds.length === 0) return {}
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('tables')
+    .select('restaurant_id, table_number')
+    .in('restaurant_id', restaurantIds)
+    .eq('is_active', true)
+    .order('table_number', { ascending: true })
+
+  if (error) return {}
+
+  const result: Record<string, string> = {}
+  for (const row of data || []) {
+    if (!result[row.restaurant_id]) {
+      result[row.restaurant_id] = String(row.table_number)
+    }
+  }
+  return result
+}
+
 export async function getTablesByRestaurantSlug(restaurantSlug: string) {
   // Get restaurant to verify it exists and get its ID
   const restaurant = await getRestaurantBySlug(restaurantSlug)

@@ -37,8 +37,11 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [searchResultId, setSearchResultId] = useState<string | null>(null)
   const [showCounterOrderModal, setShowCounterOrderModal] = useState(false)
+  const [statusUpdateError, setStatusUpdateError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const loadOrders = async (status?: string, silent = false) => {
+    if (!silent) setLoadError(null)
     setIsRefreshing(true)
     if (!silent) {
       setIsLoading(true)
@@ -48,7 +51,8 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
         ? await getOrdersByStatusAndRestaurantSlug(status, restaurantSlug)
         : await getAllOrdersByRestaurantSlug(restaurantSlug)
       setOrders(data)
-      
+      setLoadError(null)
+
       // Update selected order if it exists
       if (selectedOrder) {
         const updatedOrder = data.find((o: any) => o.id === selectedOrder.id)
@@ -57,7 +61,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
         }
       }
     } catch (error) {
-      console.error('Failed to load orders:', error)
+      setLoadError(error instanceof Error ? error.message : 'Failed to load orders')
     } finally {
       setIsLoading(false)
       setIsRefreshing(false)
@@ -95,14 +99,15 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
   }
 
   const handleUpdateStatus = async (orderId: string, status: OrderStatus) => {
+    setStatusUpdateError(null)
     try {
-      await updateOrderStatus(orderId, status as any)
+      await updateOrderStatus(restaurantSlug, orderId, status as any)
       await loadOrders(activeTab)
       if (selectedOrder?.id === orderId) {
         setSelectedOrder(null)
       }
-    } catch (error: any) {
-      alert(error.message || 'Failed to update order status')
+    } catch (error: unknown) {
+      setStatusUpdateError(error instanceof Error ? error.message : 'Failed to update order status')
     }
   }
 
@@ -270,6 +275,39 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
               </TabsList>
 
               <TabsContent value={activeTab} className="mt-4">
+                {loadError && (
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertDescription className="flex items-center justify-between gap-2">
+                      <span>{loadError}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-auto p-1 -m-1"
+                        onClick={() => {
+                          setLoadError(null)
+                          loadOrders(activeTab === 'incoming' ? undefined : activeTab)
+                        }}
+                      >
+                        Retry
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {statusUpdateError && (
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertDescription className="flex items-center justify-between gap-2">
+                      <span>{statusUpdateError}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-auto p-1 -m-1"
+                        onClick={() => setStatusUpdateError(null)}
+                      >
+                        Dismiss
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
+                )}
                 {isLoading ? (
                   <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
                     <RefreshCw className="w-8 h-8 animate-spin text-muted-foreground/50" />

@@ -89,6 +89,8 @@ export async function createRestaurant(
   }
 
   revalidatePath('/admin')
+  revalidatePath('/admin/dashboard')
+  revalidatePath('/admin/restaurants')
 
   return data
 }
@@ -117,7 +119,9 @@ export async function updateRestaurant(
     throw new Error(`Failed to update restaurant: ${error.message}`)
   }
 
+  revalidatePath('/admin')
   revalidatePath('/admin/dashboard')
+  revalidatePath('/admin/restaurants')
   revalidatePath('/table', 'layout')
 
   return data

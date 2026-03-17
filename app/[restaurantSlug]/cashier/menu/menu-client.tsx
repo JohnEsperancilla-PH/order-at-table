@@ -64,6 +64,7 @@ export function MenuManagementClient({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [deleteItemId, setDeleteItemId] = useState<string | null>(null)
   const [deleteItemName, setDeleteItemName] = useState<string | null>(null)
+  const [toggleError, setToggleError] = useState<string | null>(null)
   const [sizes, setSizes] = useState<any[]>([])
   const [sizeName, setSizeName] = useState('')
   const [sizePriceModifier, setSizePriceModifier] = useState('')
@@ -126,12 +127,13 @@ export function MenuManagementClient({
   const uncategorizedItems = itemsByCategory['uncategorized'] || []
 
   const handleToggleAvailability = async (itemId: string, currentStatus: boolean) => {
+    setToggleError(null)
     setUpdatingItems(prev => new Set(prev).add(itemId))
     try {
-      await toggleMenuItemAvailability(itemId, !currentStatus)
+      await toggleMenuItemAvailability(itemId, !currentStatus, restaurantSlug)
       await loadMenuData()
-    } catch (error: any) {
-      alert(error.message || 'Failed to update item availability')
+    } catch (error: unknown) {
+      setToggleError(error instanceof Error ? error.message : 'Failed to update item availability')
     } finally {
       setUpdatingItems(prev => {
         const next = new Set(prev)
@@ -274,25 +276,33 @@ export function MenuManagementClient({
       }
 
       if (editingItemId) {
-        await updateMenuItem(editingItemId, {
-          name: itemName.trim(),
-          description: itemDescription.trim() || null,
-          price: priceValue,
-          category_id: itemCategoryId,
-          is_available: itemAvailable,
-          image_url: imageUrl ?? itemImagePreview,
-        })
+        await updateMenuItem(
+          editingItemId,
+          {
+            name: itemName.trim(),
+            description: itemDescription.trim() || null,
+            price: priceValue,
+            category_id: itemCategoryId,
+            is_available: itemAvailable,
+            image_url: imageUrl ?? itemImagePreview,
+          },
+          restaurantSlug
+        )
         await loadMenuData()
         setIsItemDialogOpen(false)
       } else {
-        const newItem = await createMenuItem(restaurantId, {
-          name: itemName.trim(),
-          description: itemDescription.trim() || null,
-          price: priceValue,
-          category_id: itemCategoryId,
-          is_available: itemAvailable,
-          image_url: imageUrl,
-        })
+        const newItem = await createMenuItem(
+          restaurantId,
+          {
+            name: itemName.trim(),
+            description: itemDescription.trim() || null,
+            price: priceValue,
+            category_id: itemCategoryId,
+            is_available: itemAvailable,
+            image_url: imageUrl,
+          },
+          restaurantSlug
+        )
         // Stay in the dialog to allow adding sizes
         setEditingItemId(newItem.id)
         setIsNewItem(true)
@@ -313,7 +323,7 @@ export function MenuManagementClient({
     if (!deleteItemId) return
 
     try {
-      await deleteMenuItem(deleteItemId)
+      await deleteMenuItem(deleteItemId, restaurantSlug)
       await loadMenuData()
     } catch (error: any) {
       setItemError(error.message || 'Failed to delete menu item')
@@ -337,10 +347,14 @@ export function MenuManagementClient({
     }
 
     try {
-      const newSize = await addSize(editingItemId, {
-        name: sizeName.trim(),
-        price_modifier: modifier,
-      })
+      const newSize = await addSize(
+        editingItemId,
+        {
+          name: sizeName.trim(),
+          price_modifier: modifier,
+        },
+        restaurantSlug
+      )
       setSizes([...sizes, newSize])
       setSizeName('')
       setSizePriceModifier('')
@@ -352,7 +366,7 @@ export function MenuManagementClient({
 
   const handleDeleteSize = async (sizeId: string) => {
     try {
-      await deleteSize(sizeId)
+      await deleteSize(sizeId, restaurantSlug)
       setSizes(sizes.filter(s => s.id !== sizeId))
       setItemError(null)
     } catch (error: any) {
@@ -439,6 +453,21 @@ export function MenuManagementClient({
           {itemError && !isItemDialogOpen && !isDeleteDialogOpen && (
             <Alert variant="destructive" className="mb-4">
               <AlertDescription>{itemError}</AlertDescription>
+            </Alert>
+          )}
+          {toggleError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription className="flex items-center justify-between gap-2">
+                <span>{toggleError}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto p-1 -m-1"
+                  onClick={() => setToggleError(null)}
+                >
+                  Dismiss
+                </Button>
+              </AlertDescription>
             </Alert>
           )}
           {menuItems.length === 0 ? (

@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 
+function escapeHtml(str: string): string {
+  if (typeof str !== 'string') return ''
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -66,21 +76,21 @@ export async function POST(request: NextRequest) {
             <table style="width: 100%; border-collapse: collapse;">
               <tr>
                 <td style="padding: 8px 0; font-weight: bold; color: #555; width: 140px;">Name:</td>
-                <td style="padding: 8px 0; color: #333;">${name}</td>
+                <td style="padding: 8px 0; color: #333;">${escapeHtml(String(name))}</td>
               </tr>
               <tr>
                 <td style="padding: 8px 0; font-weight: bold; color: #555;">Email:</td>
-                <td style="padding: 8px 0; color: #333;">${email}</td>
+                <td style="padding: 8px 0; color: #333;">${escapeHtml(String(email))}</td>
               </tr>
               ${phone ? `
                 <tr>
                   <td style="padding: 8px 0; font-weight: bold; color: #555;">Phone:</td>
-                  <td style="padding: 8px 0; color: #333;">${phone}</td>
+                  <td style="padding: 8px 0; color: #333;">${escapeHtml(String(phone))}</td>
                 </tr>
               ` : ''}
               <tr>
                 <td style="padding: 8px 0; font-weight: bold; color: #555;">Inquiry Type:</td>
-                <td style="padding: 8px 0; color: #333;">${inquiryTypeLabels[inquiryType] || inquiryType}</td>
+                <td style="padding: 8px 0; color: #333;">${escapeHtml(String(inquiryTypeLabels[inquiryType] || inquiryType))}</td>
               </tr>
             </table>
           </div>
@@ -94,13 +104,13 @@ export async function POST(request: NextRequest) {
                 ${restaurantName ? `
                   <tr>
                     <td style="padding: 8px 0; font-weight: bold; color: #555; width: 140px;">Restaurant Name:</td>
-                    <td style="padding: 8px 0; color: #333;">${restaurantName}</td>
+                    <td style="padding: 8px 0; color: #333;">${escapeHtml(String(restaurantName))}</td>
                   </tr>
                 ` : ''}
                 ${restaurantType ? `
                   <tr>
                     <td style="padding: 8px 0; font-weight: bold; color: #555;">Restaurant Type:</td>
-                    <td style="padding: 8px 0; color: #333;">${restaurantTypeLabels[restaurantType] || restaurantType}</td>
+                    <td style="padding: 8px 0; color: #333;">${escapeHtml(String(restaurantTypeLabels[restaurantType] || restaurantType))}</td>
                   </tr>
                 ` : ''}
               </table>
@@ -110,7 +120,7 @@ export async function POST(request: NextRequest) {
           <!-- Message -->
           <div style="background-color: #f0fdf4; padding: 20px; border-radius: 6px; margin-bottom: 20px;">
             <h2 style="color: #333; font-size: 18px; margin-top: 0;">Message</h2>
-            <div style="color: #333; line-height: 1.6; white-space: pre-wrap;">${message}</div>
+            <div style="color: #333; line-height: 1.6; white-space: pre-wrap;">${escapeHtml(String(message))}</div>
           </div>
 
           <!-- Next Steps -->
@@ -163,7 +173,7 @@ Sent at: ${new Date().toLocaleString()}
     const mailOptions = {
       from: process.env.SMTP_USER,
       to: process.env.CONTACT_EMAIL || process.env.SMTP_USER, // Your email where you want to receive contacts
-      subject: `QRDer Contact: ${inquiryTypeLabels[inquiryType] || inquiryType} - ${name}`,
+      subject: `QRDer Contact: ${escapeHtml(String(inquiryTypeLabels[inquiryType] || inquiryType))} - ${escapeHtml(String(name))}`,
       text: emailText,
       html: emailHtml,
       replyTo: email // Allow you to reply directly to the customer

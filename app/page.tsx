@@ -87,13 +87,12 @@ export default function HomePage() {
       <div className="bg-muted/30 py-12">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-8">
-            <p className="text-muted-foreground text-lg">Trusted by restaurants worldwide</p>
+            <p className="text-muted-foreground text-lg"> Soon to be Trusted by restaurants nationwide</p>
           </div>
           <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-60">
-            <div className="text-2xl font-bold">Restaurant Chain A</div>
-            <div className="text-2xl font-bold">Bistro Group</div>
-            <div className="text-2xl font-bold">Cafe Network</div>
-            <div className="text-2xl font-bold">Food Hall Co</div>
+            <div className="text-2xl font-bold">Fast</div>
+            <div className="text-2xl font-bold">Reliable</div>
+            <div className="text-2xl font-bold">Efficient</div>
           </div>
         </div>
       </div>

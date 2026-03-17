@@ -8,7 +8,8 @@ export async function addSize(
   size: {
     name: string
     price_modifier: number
-  }
+  },
+  restaurantSlug?: string
 ) {
   const supabase = await createClient()
 
@@ -36,11 +37,13 @@ export async function addSize(
     throw new Error(`Failed to add size: ${error.message}`)
   }
 
-  revalidatePath('/admin/menu')
+  if (restaurantSlug) {
+    revalidatePath(`/${restaurantSlug}/cashier/menu`)
+  }
   return data
 }
 
-export async function deleteSize(sizeId: string) {
+export async function deleteSize(sizeId: string, restaurantSlug?: string) {
   const supabase = await createClient()
 
   const { error } = await supabase
@@ -52,7 +55,9 @@ export async function deleteSize(sizeId: string) {
     throw new Error(`Failed to delete size: ${error.message}`)
   }
 
-  revalidatePath('/admin/menu')
+  if (restaurantSlug) {
+    revalidatePath(`/${restaurantSlug}/cashier/menu`)
+  }
 }
 
 export async function getSizesForMenuItem(menuItemId: string) {
@@ -106,7 +111,8 @@ export async function updateSize(
   updates: {
     name?: string
     price_modifier?: number
-  }
+  },
+  restaurantSlug?: string
 ) {
   const supabase = await createClient()
 
@@ -121,6 +127,8 @@ export async function updateSize(
     throw new Error(`Failed to update size: ${error.message}`)
   }
 
-  revalidatePath('/admin/menu')
+  if (restaurantSlug) {
+    revalidatePath(`/${restaurantSlug}/cashier/menu`)
+  }
   return data
 }

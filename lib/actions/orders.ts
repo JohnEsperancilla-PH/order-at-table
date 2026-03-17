@@ -491,12 +491,34 @@ export async function verifyOrderByCode(confirmationCode: string) {
 }
 
 export async function updateOrderStatus(
+  restaurantSlug: string,
   orderId: string,
   status: 'confirmed' | 'completed' | 'cancelled'
 ) {
   const supabase = await createClient()
 
-  const updateData: any = { status }
+  // Verify restaurant exists and get its ID
+  const restaurant = await getRestaurantBySlug(restaurantSlug)
+  if (!restaurant) {
+    throw new Error('Restaurant not found')
+  }
+
+  // Fetch order and verify it belongs to this restaurant
+  const { data: existingOrder, error: fetchError } = await supabase
+    .from('orders')
+    .select('id, restaurant_id')
+    .eq('id', orderId)
+    .single()
+
+  if (fetchError || !existingOrder) {
+    throw new Error('Order not found')
+  }
+
+  if (existingOrder.restaurant_id !== restaurant.id) {
+    throw new Error('Order does not belong to this restaurant')
+  }
+
+  const updateData: { status: string; completed_at?: string } = { status }
   if (status === 'completed') {
     updateData.completed_at = new Date().toISOString()
   }
@@ -505,6 +527,7 @@ export async function updateOrderStatus(
     .from('orders')
     .update(updateData)
     .eq('id', orderId)
+    .eq('restaurant_id', restaurant.id)
     .select()
     .single()
 
@@ -512,7 +535,8 @@ export async function updateOrderStatus(
     throw new Error(`Failed to update order: ${error.message}`)
   }
 
-  revalidatePath('/admin')
+  revalidatePath(`/${restaurantSlug}/cashier`)
+  revalidatePath(`/${restaurantSlug}/table`)
   return data
 }
 

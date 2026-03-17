@@ -7,6 +7,8 @@ import { Separator } from '@/components/ui/separator'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
+import { Badge } from '@/components/ui/badge'
+import { ShieldCheck, Store } from 'lucide-react'
 
 interface AdminLayoutProps {
   children: React.ReactNode
@@ -35,26 +37,33 @@ export function AdminLayout({ children, restaurantSlug }: AdminLayoutProps) {
     router.replace(redirectTo)
   }
 
-  const homeLink = restaurantSlug ? `/${restaurantSlug}/cashier` : '/admin'
+  const homeLink = restaurantSlug ? `/${restaurantSlug}/cashier` : '/admin/dashboard'
+  const heading = restaurantSlug ? `${restaurantSlug} Cashier` : 'Platform Admin'
 
   return (
     <SidebarProvider>
       <AdminSidebar restaurantSlug={restaurantSlug} />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
-          <Link href={homeLink} className="text-lg font-semibold">
-            Order at Table
+          <Link href={homeLink} className="text-sm font-semibold md:text-base">
+            {heading}
           </Link>
+          <div className="hidden md:flex">
+            <Badge variant="outline" className="gap-1.5 font-normal">
+              {restaurantSlug ? <Store className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+              {restaurantSlug ? 'Restaurant View' : 'Platform View'}
+            </Badge>
+          </div>
           <div className="ml-auto">
             <Button variant="outline" size="sm" onClick={handleSignOut}>
               Sign out
             </Button>
           </div>
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
-          <div className="mx-auto w-full max-w-6xl">
+        <div className="flex flex-1 flex-col p-4 md:p-6">
+          <div className="mx-auto w-full max-w-7xl">
             {children}
           </div>
         </div>

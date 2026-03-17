@@ -46,6 +46,9 @@ export async function createStaffAccount(
   }
 
   revalidatePath('/admin')
+  revalidatePath('/admin/dashboard')
+  revalidatePath('/admin/restaurants')
+  revalidatePath('/admin/restaurants/accounts')
   return {
     ...data,
     password_hash: undefined, // Don't return password hash
@@ -102,6 +105,37 @@ export async function loginStaffAccount(restaurantSlug: string, email: string, p
   }
 }
 
+export async function getAllStaffAccountsForPlatformAdmin() {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('staff_accounts')
+    .select(`
+      id,
+      email,
+      name,
+      role,
+      is_active,
+      created_at,
+      restaurants (
+        id,
+        name,
+        slug
+      )
+    `)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    throw new Error(`Failed to fetch staff accounts: ${error.message}`)
+  }
+
+  return (data || []).map((row: any) => {
+    const { restaurants, ...rest } = row
+    const restaurant = Array.isArray(restaurants) ? restaurants[0] : restaurants
+    return { ...rest, restaurant }
+  })
+}
+
 export async function getStaffAccountsByRestaurant(restaurantId: string) {
   const supabase = await createClient()
 
@@ -131,6 +165,9 @@ export async function deleteStaffAccount(accountId: string) {
   }
 
   revalidatePath('/admin')
+  revalidatePath('/admin/dashboard')
+  revalidatePath('/admin/restaurants')
+  revalidatePath('/admin/restaurants/accounts')
 }
 
 export async function updateStaffAccount(
@@ -155,5 +192,8 @@ export async function updateStaffAccount(
   }
 
   revalidatePath('/admin')
+  revalidatePath('/admin/dashboard')
+  revalidatePath('/admin/restaurants')
+  revalidatePath('/admin/restaurants/accounts')
   return data
 }

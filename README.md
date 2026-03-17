@@ -170,6 +170,8 @@ order-at-table/
 ### POST `/api/cron/keep-alive`
 Lightweight endpoint to keep Supabase database active. Can be called by a cron job service.
 
+If `CRON_SECRET` is set in environment variables, requests must include `Authorization: Bearer <CRON_SECRET>`.
+
 ### POST `/api/orders/verify`
 Verify an order by confirmation code.
 
@@ -198,6 +200,8 @@ Verify an order by confirmation code.
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key  # For staff auth validation in middleware
+CRON_SECRET=optional_secret_for_keep_alive       # If set, keep-alive requires Authorization: Bearer <CRON_SECRET>
 ```
 
 ## Deployment

@@ -56,16 +56,21 @@ export function CategoriesManagementClient({
 
     try {
       if (editingCategory) {
-        const updated = await updateMenuCategory(editingCategory.id, {
-          name: categoryName.trim(),
-          description: categoryDescription.trim() || null,
-        })
+        const updated = await updateMenuCategory(
+          editingCategory.id,
+          {
+            name: categoryName.trim(),
+            description: categoryDescription.trim() || null,
+          },
+          restaurantSlug
+        )
         setCategories(prev => prev.map(item => (item.id === updated.id ? updated : item)))
       } else {
         const created = await createMenuCategory(
           restaurantId,
           categoryName.trim(),
-          categoryDescription.trim() || null
+          categoryDescription.trim() || null,
+          restaurantSlug
         )
         setCategories(prev => [...prev, created])
       }
@@ -77,7 +82,7 @@ export function CategoriesManagementClient({
 
   const handleToggleCategory = async (categoryId: string, isActive: boolean) => {
     try {
-      const updated = await toggleMenuCategoryActive(categoryId, isActive)
+      const updated = await toggleMenuCategoryActive(categoryId, isActive, restaurantSlug)
       setCategories(prev => prev.map(item => (item.id === updated.id ? updated : item)))
     } catch (error: any) {
       setCategoryError(error.message || 'Failed to update category')
@@ -88,7 +93,7 @@ export function CategoriesManagementClient({
     if (!deleteCategoryId) return
 
     try {
-      await deleteMenuCategory(deleteCategoryId)
+      await deleteMenuCategory(deleteCategoryId, restaurantSlug)
       setCategories(prev => prev.filter(item => item.id !== deleteCategoryId))
       setIsDeleteDialogOpen(false)
       setDeleteCategoryId(null)
