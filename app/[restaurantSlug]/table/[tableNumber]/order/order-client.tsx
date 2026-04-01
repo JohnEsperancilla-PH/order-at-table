@@ -41,6 +41,7 @@ export function OrderPageClient({
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [discountCode, setDiscountCode] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [pendingSubmissionKey, setPendingSubmissionKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [orderPlaced, setOrderPlaced] = useState<Order | null>(activeOrder ?? null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -190,6 +191,10 @@ export function OrderPageClient({
 
     setIsSubmitting(true)
     setError(null)
+    const submissionKey = pendingSubmissionKey || crypto.randomUUID()
+    if (!pendingSubmissionKey) {
+      setPendingSubmissionKey(submissionKey)
+    }
 
     try {
       // Ensure customer name/session exists
@@ -232,12 +237,14 @@ export function OrderPageClient({
         orderItems,
         discountCode.trim() || undefined,
         sessionId ?? undefined,
-        customerName ?? undefined
+        customerName ?? undefined,
+        submissionKey
       )
 
       setOrderPlaced(order)
       setCart([])
       setDiscountCode('')
+      setPendingSubmissionKey(null)
       setShowConfirmDialog(false)
       router.replace(`/${restaurantSlug}/table/${table.table_number}/orders/${order.id}/${order.status}`)
     } catch (err: any) {

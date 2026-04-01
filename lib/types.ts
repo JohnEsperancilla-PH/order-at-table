@@ -14,6 +14,10 @@ export interface Restaurant {
   is_open: boolean
   opening_hours: string | null
   contact_number: string | null
+  service_charge_rate?: number
+  tax_rate?: number
+  tax_mode?: 'inclusive' | 'exclusive'
+  kitchen_cutoff_time?: string | null
   created_at: string
   updated_at: string
 }
@@ -46,6 +50,7 @@ export interface MenuItem {
   name: string
   description: string | null
   price: number
+  cost_price?: number
   image_url: string | null
   display_order: number
   is_available: boolean
@@ -80,6 +85,10 @@ export interface Order {
   completed_at: string | null
   customer_session_id?: string | null
   customer_name?: string | null
+  idempotency_key?: string | null
+  payment_verified_at?: string | null
+  receipt_resent_count?: number
+  cancelled_reason?: string | null
 }
 
 export interface OrderItem {

@@ -21,6 +21,10 @@ interface DashboardClientProps {
     is_open?: boolean
     opening_hours?: string | null
     contact_number?: string | null
+    service_charge_rate?: number | null
+    tax_rate?: number | null
+    tax_mode?: 'inclusive' | 'exclusive' | null
+    kitchen_cutoff_time?: string | null
   }
   restaurantSlug: string
 }
@@ -34,6 +38,12 @@ export function DashboardClient({ initialRestaurant, restaurantSlug }: Dashboard
   const [isOpen, setIsOpen] = useState(initialRestaurant.is_open ?? true)
   const [openingHours, setOpeningHours] = useState(initialRestaurant.opening_hours || '')
   const [contactNumber, setContactNumber] = useState(initialRestaurant.contact_number || '')
+  const [serviceChargeRate, setServiceChargeRate] = useState(String(initialRestaurant.service_charge_rate ?? 0))
+  const [taxRate, setTaxRate] = useState(String(initialRestaurant.tax_rate ?? 0))
+  const [taxMode, setTaxMode] = useState<'inclusive' | 'exclusive'>(
+    initialRestaurant.tax_mode === 'inclusive' ? 'inclusive' : 'exclusive'
+  )
+  const [kitchenCutoffTime, setKitchenCutoffTime] = useState(initialRestaurant.kitchen_cutoff_time || '')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -145,6 +155,10 @@ export function DashboardClient({ initialRestaurant, restaurantSlug }: Dashboard
           is_open: isOpen,
           opening_hours: openingHours.trim() || null,
           contact_number: contactNumber.trim() || null,
+          service_charge_rate: Number(serviceChargeRate || 0),
+          tax_rate: Number(taxRate || 0),
+          tax_mode: taxMode,
+          kitchen_cutoff_time: kitchenCutoffTime || null,
         })
         setSuccess('Restaurant details updated')
       } catch (err: any) {
@@ -267,6 +281,57 @@ export function DashboardClient({ initialRestaurant, restaurantSlug }: Dashboard
           </div>
 
           <Separator />
+
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Business Rules</p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="service-charge-rate">Service Charge (%)</Label>
+                <Input
+                  id="service-charge-rate"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={serviceChargeRate}
+                  onChange={event => setServiceChargeRate(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tax-rate">Tax Rate (%)</Label>
+                <Input
+                  id="tax-rate"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={taxRate}
+                  onChange={event => setTaxRate(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tax-mode">Tax Mode</Label>
+                <select
+                  id="tax-mode"
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={taxMode}
+                  onChange={event => setTaxMode(event.target.value as 'inclusive' | 'exclusive')}
+                >
+                  <option value="exclusive">Exclusive</option>
+                  <option value="inclusive">Inclusive</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="kitchen-cutoff">Kitchen Cutoff Time</Label>
+                <Input
+                  id="kitchen-cutoff"
+                  type="time"
+                  value={kitchenCutoffTime}
+                  onChange={event => setKitchenCutoffTime(event.target.value)}
+                />
+              </div>
+            </div>
+          </div>
 
           <div className="space-y-3">
             <p className="text-sm font-medium">Live Preview</p>

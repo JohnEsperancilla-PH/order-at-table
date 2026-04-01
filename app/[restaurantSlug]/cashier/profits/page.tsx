@@ -1,4 +1,4 @@
-import { getAllOrdersByRestaurantSlug } from '@/lib/actions/orders'
+import { getAllOrdersByRestaurantSlug, getMenuItemsByRestaurantSlug } from '@/lib/actions/orders'
 import { ProfitsClient } from './profits-client'
 import { notFound } from 'next/navigation'
 import { getRestaurantBySlug } from '@/lib/actions/restaurants'
@@ -15,7 +15,10 @@ export default async function ProfitsPage({
     notFound()
   }
 
-  const orders = await getAllOrdersByRestaurantSlug(restaurantSlug)
+  const [orders, menuItems] = await Promise.all([
+    getAllOrdersByRestaurantSlug(restaurantSlug),
+    getMenuItemsByRestaurantSlug(restaurantSlug, true),
+  ])
 
-  return <ProfitsClient initialOrders={orders} />
+  return <ProfitsClient initialOrders={orders} menuItems={menuItems} />
 }

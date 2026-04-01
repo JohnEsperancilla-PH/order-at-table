@@ -20,6 +20,7 @@ A production-ready QR-based ordering system for restaurants that allows customer
 - ✅ Manually disable menu items (out of stock)
 - ✅ View orders per table
 - ✅ Filter orders by status
+- ✅ Client settings page for cashier behavior (theme, keyboard mode, bulk actions, live refresh)
 
 ## Tech Stack
 
@@ -175,6 +176,9 @@ If `CRON_SECRET` is set in environment variables, requests must include `Authori
 ### POST `/api/orders/verify`
 Verify an order by confirmation code.
 
+### GET `/api/health`
+Deployment health endpoint for monitoring and required-environment checks.
+
 **Request:**
 ```json
 {
@@ -203,6 +207,38 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key  # For staff auth validation in middleware
 CRON_SECRET=optional_secret_for_keep_alive       # If set, keep-alive requires Authorization: Bearer <CRON_SECRET>
 ```
+
+Use the environment template:
+
+```bash
+cp .env.example .env.local
+```
+
+Validate required variables before deployment:
+
+```bash
+npm run check:env
+```
+
+Run a predeploy readiness check:
+
+```bash
+npm run predeploy
+```
+
+## Cashier Settings
+
+Cashier behavior settings are available at:
+
+`/{restaurantSlug}/cashier/settings`
+
+These settings are persisted per browser/device and include:
+
+- Dark mode
+- Keyboard mode
+- Bulk options visibility
+- Live refresh on/off
+- Live refresh interval
 
 ## Deployment
 

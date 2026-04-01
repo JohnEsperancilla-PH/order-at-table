@@ -104,6 +104,10 @@ export async function updateRestaurant(
     is_open?: boolean
     opening_hours?: string | null
     contact_number?: string | null
+    service_charge_rate?: number
+    tax_rate?: number
+    tax_mode?: 'inclusive' | 'exclusive'
+    kitchen_cutoff_time?: string | null
   }
 ) {
   const supabase = await createClient()

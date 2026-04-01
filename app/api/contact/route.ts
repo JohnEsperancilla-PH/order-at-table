@@ -1,5 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
+import { getClientIp, isRateLimited } from '@/lib/security/request-guard'
+
+const CONTACT_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000
+const CONTACT_RATE_LIMIT_MAX_ATTEMPTS = 8
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const ALLOWED_INQUIRY_TYPES = new Set([
+  'free-trial',
+  'demo',
+  'pricing',
+  'features',
+  'support',
+  'partnership',
+  'other',
+])
 
 function escapeHtml(str: string): string {
   if (typeof str !== 'string') return ''
@@ -13,8 +28,31 @@ function escapeHtml(str: string): string {
 
 export async function POST(request: NextRequest) {
   try {
+    const contentType = request.headers.get('content-type') || ''
+    if (!contentType.toLowerCase().includes('application/json')) {
+      return NextResponse.json(
+        { message: 'Content-Type must be application/json' },
+        { status: 415 }
+      )
+    }
+
+    const clientIp = getClientIp(request.headers)
+    const bucketKey = `contact:${clientIp}`
+    if (isRateLimited({ bucketKey, limit: CONTACT_RATE_LIMIT_MAX_ATTEMPTS, windowMs: CONTACT_RATE_LIMIT_WINDOW_MS })) {
+      return NextResponse.json(
+        { message: 'Too many submissions. Please try again later.' },
+        { status: 429 }
+      )
+    }
+
     const body = await request.json()
-    const { name, email, phone, restaurantName, restaurantType, message, inquiryType } = body
+    const name = String(body?.name || '').trim()
+    const email = String(body?.email || '').trim().toLowerCase()
+    const phone = String(body?.phone || '').trim()
+    const restaurantName = String(body?.restaurantName || '').trim()
+    const restaurantType = String(body?.restaurantType || '').trim()
+    const message = String(body?.message || '').trim()
+    const inquiryType = String(body?.inquiryType || '').trim()
 
     // Validate required fields
     if (!name || !email || !message || !inquiryType) {
@@ -24,14 +62,47 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (name.length > 120 || message.length > 5000 || restaurantName.length > 120 || phone.length > 40) {
+      return NextResponse.json(
+        { message: 'One or more fields exceed allowed length' },
+        { status: 400 }
+      )
+    }
+
+    if (!EMAIL_REGEX.test(email)) {
+      return NextResponse.json(
+        { message: 'Please provide a valid email address' },
+        { status: 400 }
+      )
+    }
+
+    if (!ALLOWED_INQUIRY_TYPES.has(inquiryType)) {
+      return NextResponse.json(
+        { message: 'Invalid inquiry type selected' },
+        { status: 400 }
+      )
+    }
+
+    const smtpHost = process.env.SMTP_HOST
+    const smtpPort = process.env.SMTP_PORT
+    const smtpUser = process.env.SMTP_USER
+    const smtpPass = process.env.SMTP_PASS
+    if (!smtpHost || !smtpPort || !smtpUser || !smtpPass) {
+      console.error('Contact API is missing SMTP environment configuration')
+      return NextResponse.json(
+        { message: 'Contact service is not configured. Please try again later.' },
+        { status: 503 }
+      )
+    }
+
     // Create transporter - configured for GoDaddy email
     const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '465'),
+      host: smtpHost,
+      port: parseInt(smtpPort, 10),
       secure: process.env.SMTP_SECURE === 'true',
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
+        user: smtpUser,
+        pass: smtpPass
       }
     })
 

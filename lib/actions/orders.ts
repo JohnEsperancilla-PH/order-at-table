@@ -4,6 +4,29 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { getRestaurantBySlug } from './restaurants'
 
+type AuditActorType = 'system' | 'cashier' | 'admin'
+
+async function writeAuditLog(params: {
+  restaurantId: string
+  action: string
+  entityType: string
+  entityId?: string
+  actorType?: AuditActorType
+  actorId?: string
+  metadata?: Record<string, unknown>
+}) {
+  const supabase = await createClient()
+  await supabase.from('audit_logs').insert({
+    restaurant_id: params.restaurantId,
+    action: params.action,
+    entity_type: params.entityType,
+    entity_id: params.entityId || null,
+    actor_type: params.actorType || 'system',
+    actor_id: params.actorId || null,
+    metadata: params.metadata || null,
+  })
+}
+
 export async function getTable(tableId: string) {
   const supabase = await createClient()
   
@@ -272,9 +295,31 @@ export async function createOrder(
   items: Array<{ menu_item_id: string; quantity: number; price: number }>,
   discountCode?: string,
   customerSessionId?: string,
-  customerName?: string
+  customerName?: string,
+  idempotencyKey?: string
 ) {
   const supabase = await createClient()
+
+  // Return the existing order for retry-safe submissions.
+  if (idempotencyKey) {
+    const { data: existingByKey } = await supabase
+      .from('orders')
+      .select(`
+        *,
+        tables (*),
+        order_items (
+          *,
+          menu_items (*)
+        )
+      `)
+      .eq('restaurant_id', restaurantId)
+      .eq('idempotency_key', idempotencyKey)
+      .maybeSingle()
+
+    if (existingByKey) {
+      return existingByKey
+    }
+  }
 
   // If session provided, prevent duplicate active orders for the same session
   let existingOrder = null
@@ -410,11 +455,33 @@ export async function createOrder(
       expires_at: expiresAt.toISOString(),
       customer_session_id: customerSessionId || null,
       customer_name: customerName || null,
+      idempotency_key: idempotencyKey || null,
     })
     .select()
     .single()
 
   if (orderError) {
+    // If this request already succeeded with the same idempotency key, return it.
+    if (idempotencyKey && orderError.code === '23505') {
+      const { data: existingByKey } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          tables (*),
+          order_items (
+            *,
+            menu_items (*)
+          )
+        `)
+        .eq('restaurant_id', restaurantId)
+        .eq('idempotency_key', idempotencyKey)
+        .maybeSingle()
+
+      if (existingByKey) {
+        return existingByKey
+      }
+    }
+
     throw new Error(`Failed to create order: ${orderError.message}`)
   }
 
@@ -493,7 +560,13 @@ export async function verifyOrderByCode(confirmationCode: string) {
 export async function updateOrderStatus(
   restaurantSlug: string,
   orderId: string,
-  status: 'confirmed' | 'completed' | 'cancelled'
+  status: 'confirmed' | 'completed' | 'cancelled',
+  options?: {
+    cancelledReason?: string
+    actorId?: string
+    cashReceived?: number
+    changeAmount?: number
+  }
 ) {
   const supabase = await createClient()
 
@@ -518,9 +591,20 @@ export async function updateOrderStatus(
     throw new Error('Order does not belong to this restaurant')
   }
 
-  const updateData: { status: string; completed_at?: string } = { status }
+  const updateData: {
+    status: string
+    completed_at?: string
+    payment_verified_at?: string
+    cancelled_reason?: string | null
+  } = { status }
   if (status === 'completed') {
     updateData.completed_at = new Date().toISOString()
+  }
+  if (status === 'confirmed') {
+    updateData.payment_verified_at = new Date().toISOString()
+  }
+  if (status === 'cancelled') {
+    updateData.cancelled_reason = options?.cancelledReason?.trim() || null
   }
 
   const { data, error } = await supabase
@@ -535,9 +619,172 @@ export async function updateOrderStatus(
     throw new Error(`Failed to update order: ${error.message}`)
   }
 
+  await writeAuditLog({
+    restaurantId: restaurant.id,
+    action: `order.status.${status}`,
+    entityType: 'order',
+    entityId: orderId,
+    actorType: 'cashier',
+    actorId: options?.actorId,
+    metadata: {
+      previous_status: 'unknown',
+      cancelled_reason: updateData.cancelled_reason || null,
+      cash_received: options?.cashReceived ?? null,
+      change_amount: options?.changeAmount ?? null,
+    },
+  })
+
   revalidatePath(`/${restaurantSlug}/cashier`)
   revalidatePath(`/${restaurantSlug}/table`)
   return data
+}
+
+export async function bulkUpdateOrderStatus(
+  restaurantSlug: string,
+  orderIds: string[],
+  status: 'confirmed' | 'completed' | 'cancelled',
+  options?: { cancelledReason?: string; actorId?: string }
+) {
+  if (orderIds.length === 0) {
+    return { updatedCount: 0 }
+  }
+
+  const supabase = await createClient()
+  const restaurant = await getRestaurantBySlug(restaurantSlug)
+
+  if (!restaurant) {
+    throw new Error('Restaurant not found')
+  }
+
+  const updateData: {
+    status: string
+    completed_at?: string
+    payment_verified_at?: string
+    cancelled_reason?: string | null
+  } = { status }
+
+  if (status === 'completed') {
+    updateData.completed_at = new Date().toISOString()
+  }
+  if (status === 'confirmed') {
+    updateData.payment_verified_at = new Date().toISOString()
+  }
+  if (status === 'cancelled') {
+    updateData.cancelled_reason = options?.cancelledReason?.trim() || null
+  }
+
+  const { data, error } = await supabase
+    .from('orders')
+    .update(updateData)
+    .eq('restaurant_id', restaurant.id)
+    .in('id', orderIds)
+    .select('id')
+
+  if (error) {
+    throw new Error(`Failed to bulk update orders: ${error.message}`)
+  }
+
+  await writeAuditLog({
+    restaurantId: restaurant.id,
+    action: `order.bulk_status.${status}`,
+    entityType: 'order',
+    actorType: 'cashier',
+    actorId: options?.actorId,
+    metadata: {
+      order_ids: orderIds,
+      cancelled_reason: updateData.cancelled_reason || null,
+    },
+  })
+
+  revalidatePath(`/${restaurantSlug}/cashier`)
+  revalidatePath(`/${restaurantSlug}/table`)
+
+  return { updatedCount: data?.length || 0 }
+}
+
+export async function resendReceipt(restaurantSlug: string, orderId: string, actorId?: string) {
+  const supabase = await createClient()
+  const restaurant = await getRestaurantBySlug(restaurantSlug)
+
+  if (!restaurant) {
+    throw new Error('Restaurant not found')
+  }
+
+  const { data: order, error: fetchError } = await supabase
+    .from('orders')
+    .select('id, receipt_resent_count')
+    .eq('id', orderId)
+    .eq('restaurant_id', restaurant.id)
+    .single()
+
+  if (fetchError || !order) {
+    throw new Error('Order not found')
+  }
+
+  const nextResendCount = (order.receipt_resent_count || 0) + 1
+
+  const { error: updateError } = await supabase
+    .from('orders')
+    .update({ receipt_resent_count: nextResendCount })
+    .eq('id', orderId)
+    .eq('restaurant_id', restaurant.id)
+
+  if (updateError) {
+    throw new Error(`Failed to resend receipt: ${updateError.message}`)
+  }
+
+  await writeAuditLog({
+    restaurantId: restaurant.id,
+    action: 'order.receipt.resent',
+    entityType: 'order',
+    entityId: orderId,
+    actorType: 'cashier',
+    actorId,
+    metadata: { resent_count: nextResendCount },
+  })
+
+  revalidatePath(`/${restaurantSlug}/cashier`)
+  return { resentCount: nextResendCount }
+}
+
+export async function getShiftHandoverSummary(restaurantSlug: string) {
+  const supabase = await createClient()
+  const restaurant = await getRestaurantBySlug(restaurantSlug)
+
+  if (!restaurant) {
+    throw new Error('Restaurant not found')
+  }
+
+  const { data: orders, error } = await supabase
+    .from('orders')
+    .select('id, status, total_amount, table_id, created_at, expires_at')
+    .eq('restaurant_id', restaurant.id)
+    .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+
+  if (error) {
+    throw new Error(`Failed to fetch shift summary: ${error.message}`)
+  }
+
+  const all = orders || []
+  const activeStatuses = ['pending', 'awaiting_cashier_confirmation', 'confirmed']
+  const activeOrders = all.filter(order => activeStatuses.includes(order.status))
+  const unpaidOrders = all.filter(order => ['pending', 'awaiting_cashier_confirmation'].includes(order.status))
+  const now = Date.now()
+
+  const expiredPending = all.filter(order => {
+    if (order.status !== 'pending' || !order.expires_at) return false
+    return new Date(order.expires_at).getTime() < now
+  }).length
+
+  return {
+    openTables: new Set(activeOrders.map(order => order.table_id)).size,
+    unpaidTotal: unpaidOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
+    unpaidCount: unpaidOrders.length,
+    exceptions: {
+      expiredPending,
+      cancelledToday: all.filter(order => order.status === 'cancelled').length,
+    },
+  }
 }
 
 export async function getAllOrders(restaurantId?: string) {

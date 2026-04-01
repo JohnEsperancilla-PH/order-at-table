@@ -35,6 +35,7 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
   const [customerName, setCustomerName] = useState<string>('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [pendingSubmissionKey, setPendingSubmissionKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
@@ -139,11 +140,16 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
     setCart([])
     setSearchQuery('')
     setError(null)
+    setPendingSubmissionKey(null)
     setActiveCategory(Object.keys(categorizedItems)[0] || null)
   }, [categorizedItems])
 
   const handleSubmit = async () => {
     setError(null)
+    const submissionKey = pendingSubmissionKey || crypto.randomUUID()
+    if (!pendingSubmissionKey) {
+      setPendingSubmissionKey(submissionKey)
+    }
 
     if (!selectedTableId) {
       setError('Please select a table')
@@ -178,10 +184,12 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
         orderItems,
         undefined,
         undefined,
-        customerName.trim()
+        customerName.trim(),
+        submissionKey
       )
 
       resetForm()
+      setPendingSubmissionKey(null)
       onOpenChange(false)
       onOrderCreated()
     } catch (err: any) {

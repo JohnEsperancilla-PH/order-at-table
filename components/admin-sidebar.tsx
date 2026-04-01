@@ -25,6 +25,7 @@ import {
   Shield,
   UserPlus,
   Compass,
+  SlidersHorizontal,
 } from 'lucide-react'
 
 interface AdminSidebarProps {
@@ -75,6 +76,11 @@ export function AdminSidebar({ restaurantSlug }: AdminSidebarProps) {
           title: 'Profits',
           url: `/${slug}/cashier/profits`,
           icon: Wallet,
+        },
+        {
+          title: 'Settings',
+          url: `/${slug}/cashier/settings`,
+          icon: SlidersHorizontal,
         },
       ]
     } else {
@@ -176,6 +182,7 @@ export function AdminSidebar({ restaurantSlug }: AdminSidebarProps) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border/50 p-2">
         <p className="px-2 text-xs leading-relaxed text-sidebar-foreground/70">

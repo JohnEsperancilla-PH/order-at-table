@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import { AdminSidebar } from './admin-sidebar'
@@ -8,7 +9,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/badge'
-import { ShieldCheck, Store } from 'lucide-react'
+import { Moon, ShieldCheck, Store, Sun } from 'lucide-react'
 
 interface AdminLayoutProps {
   children: React.ReactNode
@@ -19,6 +20,35 @@ export function AdminLayout({ children, restaurantSlug }: AdminLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  const [isDarkMode, setIsDarkMode] = useState(false)
+  const isCashierView = !!restaurantSlug
+
+  useEffect(() => {
+    if (!isCashierView) return
+
+    const saved = localStorage.getItem('cashier-theme')
+    const shouldUseDark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches
+    document.documentElement.classList.toggle('dark', shouldUseDark)
+    setIsDarkMode(shouldUseDark)
+
+    const handleThemeUpdate = () => {
+      const latest = localStorage.getItem('cashier-theme')
+      const isDark = latest === 'dark'
+      document.documentElement.classList.toggle('dark', isDark)
+      setIsDarkMode(isDark)
+    }
+
+    window.addEventListener('cashier-theme-update', handleThemeUpdate)
+    return () => window.removeEventListener('cashier-theme-update', handleThemeUpdate)
+  }, [isCashierView])
+
+  const toggleDarkMode = () => {
+    const next = !isDarkMode
+    setIsDarkMode(next)
+    document.documentElement.classList.toggle('dark', next)
+    localStorage.setItem('cashier-theme', next ? 'dark' : 'light')
+    window.dispatchEvent(new Event('cashier-theme-update'))
+  }
 
   // Handle login page bypass
   const isLoginPage = restaurantSlug 
@@ -56,7 +86,18 @@ export function AdminLayout({ children, restaurantSlug }: AdminLayoutProps) {
               {restaurantSlug ? 'Restaurant View' : 'Platform View'}
             </Badge>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            {isCashierView && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={toggleDarkMode}
+                className="gap-1.5"
+              >
+                {isDarkMode ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                {isDarkMode ? 'Light' : 'Dark'}
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={handleSignOut}>
               Sign out
             </Button>
