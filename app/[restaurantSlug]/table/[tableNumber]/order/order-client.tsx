@@ -265,13 +265,12 @@ export function OrderPageClient({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 pb-24">
-      {/* Force 9:16 vertical layout with max width */}
-      <div className="max-w-md mx-auto p-4 space-y-6">
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 pb-24 md:flex md:items-center md:justify-center md:px-6 md:py-8 md:pb-8">
+      <div className="max-w-md mx-auto space-y-6 p-4 md:h-[840px] md:w-[28rem] md:max-h-[calc(100dvh-4rem)] md:overflow-hidden md:rounded-[28px] md:border md:bg-background md:shadow-2xl md:flex md:flex-col">
         {/* Hero with restaurant info overlay - mobile-optimized aspect ratio */}
         <div className="relative overflow-hidden rounded-2xl">
           <div
-            className="aspect-[16/9] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+              className="h-[clamp(140px,30dvh,260px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
             style={table.restaurants?.cover_image_url ? {
               backgroundImage: `url(${table.restaurants.cover_image_url})`,
               backgroundSize: 'cover',
@@ -298,7 +297,7 @@ export function OrderPageClient({
         )}
 
         {/* Single column layout for all screen sizes */}
-        <div className="space-y-4">
+        <div className="space-y-4 md:flex-1 md:min-h-0 md:overflow-y-auto md:pr-1">
           {addedMessage && (
             <div className="fixed top-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 animate-in slide-in-from-top-2 fade-in duration-200">
               <div className="flex items-center gap-3 bg-primary text-primary-foreground px-4 py-3 rounded-xl shadow-lg">
@@ -317,10 +316,30 @@ export function OrderPageClient({
             onUpdateQuantity={updateQuantity}
           />
         </div>
+
+        <div className="hidden border-t border-border/60 pt-3 md:block">
+          <Button
+            className="h-12 w-full rounded-xl text-base transition-transform active:scale-[0.98] shadow-lg"
+            size="lg"
+            onClick={() => setIsCartOpen(true)}
+            disabled={cartItemCount === 0}
+          >
+            <ShoppingCart className="mr-2 h-5 w-5" />
+            {cartItemCount > 0 ? (
+              <span className="flex items-center gap-2">
+                View Cart ({cartItemCount})
+                <span className="text-primary-foreground/70">&middot;</span>
+                <span>{formatCurrency(subtotal)}</span>
+              </span>
+            ) : (
+              'Cart is empty'
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Fixed cart button for all screen sizes - 9:16 optimized */}
-      <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2 z-40 p-3 w-full max-w-md bg-background/90 backdrop-blur-lg border-t">
+      <div className="fixed bottom-0 left-1/2 z-40 w-full max-w-md -translate-x-1/2 border-t bg-background/90 p-3 backdrop-blur-lg md:hidden">
         <Button
           className="w-full rounded-xl h-12 text-base transition-transform active:scale-[0.98] shadow-lg"
           size="lg"
@@ -340,7 +359,10 @@ export function OrderPageClient({
         </Button>
       </div>
           <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
-            <SheetContent side="bottom" className="max-h-[85vh] rounded-t-2xl !h-auto max-w-md mx-auto">
+            <SheetContent
+              side="bottom"
+              className="!h-auto max-h-[85vh] max-w-md rounded-t-2xl md:bottom-[calc(50%-420px+0.75rem)] md:left-1/2 md:w-[calc(28rem-1.5rem)] md:max-w-[calc(28rem-1.5rem)] md:-translate-x-1/2 md:rounded-2xl md:border md:shadow-2xl"
+            >
               <SheetHeader>
                 <SheetTitle className="flex items-center gap-2">
                   <span>Your Cart</span>
@@ -464,7 +486,7 @@ export function OrderPageClient({
           if (open) setError(null)
         }}
       >
-        <DialogContent className="max-w-md px-6 sm:px-8">
+        <DialogContent className="max-w-md px-6 sm:px-8 md:w-[calc(28rem-1.5rem)] md:max-w-[calc(28rem-1.5rem)]">
           <DialogHeader>
             <DialogTitle className="text-lg">Confirm Your Order</DialogTitle>
             <DialogDescription className="text-sm">
@@ -587,13 +609,12 @@ export function OrderConfirmationView({
   const displayTable = tableNumber || (order as any)?.tables?.table_number || 'N/A'
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-b from-background to-muted/20 pb-6">
-      {/* Force 9:16 vertical layout */}
-      <div className="max-w-md mx-auto p-4 space-y-4">
+    <div className="min-h-[100dvh] bg-gradient-to-b from-background to-muted/20 pb-6 md:px-6 md:py-8">
+      <div className="max-w-md mx-auto space-y-4 p-4 md:max-w-[28rem] md:overflow-hidden md:rounded-[28px] md:border md:bg-background md:shadow-2xl">
         {/* Compact hero - mobile optimized */}
         <div className="relative overflow-hidden rounded-xl">
           <div
-            className="aspect-[16/9] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+            className="h-[clamp(140px,30dvh,260px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
             style={coverImageUrl ? { 
               backgroundImage: `url(${coverImageUrl})`, 
               backgroundSize: 'cover', 

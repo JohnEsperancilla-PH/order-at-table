@@ -37,7 +37,7 @@ export function AdminLayout({ children, restaurantSlug }: AdminLayoutProps) {
     router.replace(redirectTo)
   }
 
-  const homeLink = restaurantSlug ? `/${restaurantSlug}/cashier` : '/admin/dashboard'
+  const homeLink = restaurantSlug ? `/${restaurantSlug}/cashier` : '/admin'
   const heading = restaurantSlug ? `${restaurantSlug} Cashier` : 'Platform Admin'
 
   return (

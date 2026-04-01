@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from 'react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Plus, Minus, Check, ShoppingBag } from 'lucide-react'
 import { CartItem, MenuCategory, MenuItem } from '@/lib/types'
 import { formatCurrency } from '@/lib/utils'
@@ -132,10 +132,12 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
 
           return (
             <AccordionItem key={category.id} value={category.id}>
-              <AccordionTrigger className="text-base">
+              <AccordionTrigger className="rounded-lg px-1 text-base">
                 <div className="flex items-center gap-2">
                   <span>{category.name}</span>
-                  <Badge variant="secondary">{items.length}</Badge>
+                  <Badge variant="secondary" className="text-[11px]">
+                    {items.length}
+                  </Badge>
                 </div>
               </AccordionTrigger>
               <AccordionContent>
@@ -154,15 +156,15 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
                       return (
                         <Card
                           key={item.id}
-                          className={`overflow-hidden transition-all duration-200 hover:shadow-md active:scale-[0.99] !pt-0 !gap-0 ${
+                          className={`overflow-hidden border-border/70 transition-all duration-200 hover:border-primary/30 hover:shadow-md active:scale-[0.99] !pt-0 !gap-0 ${
                             item.is_available ? '' : 'opacity-50 grayscale'
                           }`}
                         >
                           {/* Horizontal layout for 9:16 optimization */}
-                          <div className="flex gap-3 p-3">
+                          <div className="flex items-stretch gap-3.5 p-3.5">
                             {/* Compact image */}
                             {item.image_url && (
-                              <div className="relative w-16 h-16 overflow-hidden bg-muted rounded-lg shrink-0">
+                              <div className="relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-xl bg-muted">
                                 <img
                                   src={item.image_url}
                                   alt={item.name}
@@ -183,24 +185,17 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
                             )}
 
                             {/* Content area */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex justify-between items-start gap-2">
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="font-semibold text-sm leading-tight mb-1 line-clamp-1">{item.name}</h4>
-                                  {item.description && (
-                                    <p className="text-xs text-muted-foreground leading-snug mb-2 line-clamp-1">
-                                      {item.description}
-                                    </p>
-                                  )}
-                                  <div className="flex items-center justify-between">
-                                    <div>
-                                      <span className="text-sm font-bold text-primary">
-                                        {calculatePriceRange(item)}
-                                      </span>
-                                      {hasSizes && (
-                                        <p className="text-[10px] text-muted-foreground">Choose size</p>
-                                      )}
-                                    </div>
+                            <div className="flex min-w-0 flex-1">
+                              <div className="flex w-full items-stretch justify-between gap-2">
+                                <div className="flex min-w-0 flex-1 flex-col justify-between py-0.5">
+                                  <h4 className="line-clamp-2 text-[15px] font-semibold leading-tight">{item.name}</h4>
+                                  <div>
+                                    <span className="text-sm font-bold text-primary">
+                                      {calculatePriceRange(item)}
+                                    </span>
+                                    {hasSizes && (
+                                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Choose size</p>
+                                    )}
                                   </div>
                                 </div>
 
@@ -233,7 +228,7 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
                                       size="sm"
                                       onClick={() => handleAddToCart(item)}
                                       disabled={!item.is_available}
-                                      className="rounded-full px-3 h-7 text-xs transition-transform active:scale-95"
+                                      className="h-8 rounded-full px-3.5 text-xs font-semibold transition-transform active:scale-95"
                                     >
                                       <Plus className="w-3 h-3 mr-1" />
                                       Add
@@ -264,14 +259,15 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
       </Accordion>
 
       <Sheet open={isSizeSheetOpen} onOpenChange={setIsSizeSheetOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-6 pt-5 max-w-md mx-auto">
+        <SheetContent
+          side="bottom"
+          className="max-w-md rounded-t-2xl px-4 pb-6 pt-5 md:bottom-[calc(50%-420px+0.75rem)] md:left-1/2 md:w-[calc(28rem-1.5rem)] md:max-w-[calc(28rem-1.5rem)] md:-translate-x-1/2 md:rounded-2xl md:border md:shadow-2xl"
+        >
           <SheetHeader className="mb-5 px-0">
             <SheetTitle className="text-left text-lg">{selectedItem?.name}</SheetTitle>
-            {selectedItem?.description && (
-              <SheetDescription className="text-left text-sm">
-                {selectedItem.description}
-              </SheetDescription>
-            )}
+            <SheetDescription className="text-left text-sm">
+              Select one size to continue.
+            </SheetDescription>
           </SheetHeader>
 
           <div className="space-y-5">

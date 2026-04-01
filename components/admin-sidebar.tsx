@@ -23,8 +23,8 @@ import {
   Home,
   Store,
   Shield,
-  Building2,
-  Users,
+  UserPlus,
+  Compass,
 } from 'lucide-react'
 
 interface AdminSidebarProps {
@@ -35,13 +35,14 @@ export function AdminSidebar({ restaurantSlug }: AdminSidebarProps) {
   const pathname = usePathname()
 
   const isActivePath = (url: string) => {
-    if (url === '/admin' || url === '/admin/dashboard') {
+    if (url === '/admin') {
       return pathname === '/admin' || pathname === '/admin/dashboard'
     }
+
     return pathname === url || pathname.startsWith(`${url}/`)
   }
 
-  const getMenuItems = (slug?: string) => {
+  const getPrimaryMenuItems = (slug?: string) => {
     if (slug) {
       // Restaurant cashier navigation
       return [
@@ -80,25 +81,41 @@ export function AdminSidebar({ restaurantSlug }: AdminSidebarProps) {
       // Platform admin navigation
       return [
         {
-          title: 'Dashboard',
-          url: '/admin/dashboard',
+          title: 'Overview',
+          url: '/admin',
           icon: LayoutDashboard,
         },
         {
           title: 'Restaurants',
           url: '/admin/restaurants',
-          icon: Building2,
+          icon: Store,
         },
         {
-          title: 'Accounts',
+          title: 'Staff Accounts',
           url: '/admin/restaurants/accounts',
-          icon: Users,
+          icon: UserPlus,
         },
       ]
     }
   }
 
-  const menuItems = getMenuItems(restaurantSlug)
+  const primaryItems = getPrimaryMenuItems(restaurantSlug)
+
+  const secondaryItems = restaurantSlug
+    ? [
+        {
+          title: 'Back To Platform',
+          url: '/admin',
+          icon: Shield,
+        },
+      ]
+    : [
+        {
+          title: 'Public Contact Page',
+          url: '/contact',
+          icon: Compass,
+        },
+      ]
 
   return (
     <Sidebar>
@@ -119,12 +136,31 @@ export function AdminSidebar({ restaurantSlug }: AdminSidebarProps) {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>
-            {restaurantSlug ? 'Navigation' : 'Main Navigation'}
-          </SidebarGroupLabel>
+          <SidebarGroupLabel>{restaurantSlug ? 'Cashier Navigation' : 'Platform Navigation'}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
+              {primaryItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActivePath(item.url)}
+                  >
+                    <Link href={item.url}>
+                      <item.icon className="w-4 h-4" />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>{restaurantSlug ? 'Platform' : 'External'}</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {secondaryItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
@@ -142,8 +178,10 @@ export function AdminSidebar({ restaurantSlug }: AdminSidebarProps) {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border/50 p-2">
-        <p className="px-2 text-xs text-sidebar-foreground/70">
-          Manage restaurants, accounts, and operations.
+        <p className="px-2 text-xs leading-relaxed text-sidebar-foreground/70">
+          {restaurantSlug
+            ? 'Run daily cashier operations, menus, and profits from one place.'
+            : 'Manage restaurants, staff accounts, and platform operations.'}
         </p>
       </SidebarFooter>
     </Sidebar>

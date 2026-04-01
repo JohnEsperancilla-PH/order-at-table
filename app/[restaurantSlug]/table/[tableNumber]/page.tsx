@@ -28,11 +28,12 @@ export default async function TableWelcomePage({
     const isOpen = restaurant?.is_open ?? true
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-b from-background to-muted/20 flex flex-col">
+    <div className="min-h-[100dvh] bg-gradient-to-b from-background to-muted/20 md:px-6 md:py-8">
+      <div className="mx-auto w-full md:max-w-[28rem] md:overflow-hidden md:rounded-[28px] md:border md:bg-background md:shadow-2xl">
       {/* Hero */}
       <div className="relative overflow-hidden">
         <div
-          className="aspect-[16/9] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+          className="h-[clamp(140px,30dvh,260px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
           style={restaurant?.cover_image_url ? {
             backgroundImage: `url(${restaurant.cover_image_url})`,
             backgroundSize: 'cover',
@@ -115,6 +116,7 @@ export default async function TableWelcomePage({
             </CardContent>
           </Card>
         </div>
+      </div>
       </div>
     </div>
   )
