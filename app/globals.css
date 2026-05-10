@@ -126,3 +126,10 @@
     font-weight: 400;
   }
 }
+
+@layer utilities {
+  /* Guest shell: reduce scroll chaining on nested scroll areas (mobile). */
+  .guest-overscroll-contain {
+    overscroll-behavior-y: contain;
+  }
+}

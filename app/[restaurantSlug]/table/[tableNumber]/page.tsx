@@ -29,7 +29,7 @@ export default async function TableWelcomePage({
       {/* Hero */}
       <div className="relative overflow-hidden">
         <div
-          className="h-[clamp(140px,30dvh,260px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+          className="h-[clamp(70px,15dvh,130px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
           style={restaurant?.cover_image_url ? {
             backgroundImage: `url(${restaurant.cover_image_url})`,
             backgroundSize: 'cover',
@@ -49,7 +49,7 @@ export default async function TableWelcomePage({
         </div>
       </div>
 
-      <div className="flex-1 px-4 pb-6 -mt-4 relative z-10">
+      <div className="relative z-10 -mt-4 flex-1 px-4 sm:px-5 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
         <div className="max-w-md mx-auto space-y-4">
           {/* Table info card */}
           <Card className="!gap-0">

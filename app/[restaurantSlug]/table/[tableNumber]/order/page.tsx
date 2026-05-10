@@ -1,6 +1,6 @@
 import { getTableByRestaurantSlugAndNumber } from '@/lib/actions/orders'
 import { getMenuCategories, getMenuItems } from '@/lib/actions/orders'
-import { getModifiersForMenuItems } from '@/lib/actions/modifiers'
+import { getModifiersForRestaurant } from '@/lib/actions/modifiers'
 import { OrderPageClient } from './order-client'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -41,7 +41,7 @@ export default async function OrderPage({
             {/* Hero — mobile optimized */}
             <div className="relative overflow-hidden rounded-xl">
               <div
-                className="h-[clamp(140px,30dvh,260px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+                className="h-[clamp(70px,15dvh,130px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
                 style={restaurant.cover_image_url ? {
                   backgroundImage: `url(${restaurant.cover_image_url})`,
                   backgroundSize: 'cover',
@@ -118,8 +118,7 @@ export default async function OrderPage({
       getMenuItems(table.restaurant_id, true),
     ])
 
-    const menuItemIds = menuItems.map((item: any) => item.id)
-    const modifiersByMenuItem = await getModifiersForMenuItems(menuItemIds)
+    const modifiersByMenuItem = await getModifiersForRestaurant(table.restaurant_id)
 
     const menuItemsWithModifiers = menuItems.map((item: any) => ({
       ...item,

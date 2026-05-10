@@ -2,6 +2,7 @@
 
 import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
+import { revalidateMenuCatalog } from '@/lib/cache/revalidate-menu-catalog'
 
 export async function toggleMenuItemAvailability(
   menuItemId: string,
@@ -33,6 +34,9 @@ export async function toggleMenuItemAvailability(
     revalidatePath(`/${restaurantSlug}/cashier/menu`)
   }
   revalidatePath('/admin/dashboard')
+  if (data?.restaurant_id) {
+    revalidateMenuCatalog(data.restaurant_id)
+  }
   return data
 }
 
@@ -83,6 +87,7 @@ export async function createMenuItem(
     revalidatePath(`/${restaurantSlug}/cashier/menu`)
   }
   revalidatePath('/admin/dashboard')
+  revalidateMenuCatalog(restaurantId)
   return createdItem
 }
 
@@ -115,11 +120,20 @@ export async function updateMenuItem(
     revalidatePath(`/${restaurantSlug}/cashier/menu`)
   }
   revalidatePath('/admin/dashboard')
+  if (data?.restaurant_id) {
+    revalidateMenuCatalog(data.restaurant_id)
+  }
   return data
 }
 
 export async function deleteMenuItem(menuItemId: string, restaurantSlug?: string) {
   const supabase = createServiceClient()
+
+  const { data: row } = await supabase
+    .from('menu_items')
+    .select('restaurant_id')
+    .eq('id', menuItemId)
+    .maybeSingle()
 
   const { error } = await supabase
     .from('menu_items')
@@ -134,6 +148,9 @@ export async function deleteMenuItem(menuItemId: string, restaurantSlug?: string
     revalidatePath(`/${restaurantSlug}/cashier/menu`)
   }
   revalidatePath('/admin/dashboard')
+  if (row?.restaurant_id) {
+    revalidateMenuCatalog(row.restaurant_id)
+  }
 }
 
 export async function createMenuCategory(
@@ -174,6 +191,7 @@ export async function createMenuCategory(
     revalidatePath(`/${restaurantSlug}/cashier/menu`)
   }
   revalidatePath('/admin/dashboard')
+  revalidateMenuCatalog(restaurantId)
   return data
 }
 
@@ -199,6 +217,9 @@ export async function updateMenuCategory(
     revalidatePath(`/${restaurantSlug}/cashier/menu`)
   }
   revalidatePath('/admin/dashboard')
+  if (data?.restaurant_id) {
+    revalidateMenuCatalog(data.restaurant_id)
+  }
   return data
 }
 
@@ -212,6 +233,12 @@ export async function toggleMenuCategoryActive(
 
 export async function deleteMenuCategory(categoryId: string, restaurantSlug?: string) {
   const supabase = createServiceClient()
+
+  const { data: categoryRow } = await supabase
+    .from('menu_categories')
+    .select('restaurant_id')
+    .eq('id', categoryId)
+    .maybeSingle()
 
   const { data: existingItems } = await supabase
     .from('menu_items')
@@ -236,5 +263,8 @@ export async function deleteMenuCategory(categoryId: string, restaurantSlug?: st
     revalidatePath(`/${restaurantSlug}/cashier/menu`)
   }
   revalidatePath('/admin/dashboard')
+  if (categoryRow?.restaurant_id) {
+    revalidateMenuCatalog(categoryRow.restaurant_id)
+  }
 }
 

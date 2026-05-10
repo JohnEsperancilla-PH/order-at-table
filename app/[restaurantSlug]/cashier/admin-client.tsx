@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -396,17 +396,17 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
 
   if (!isMounted) {
     return (
-      <div className="space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold">Orders</h1>
             <p className="text-muted-foreground">Preparing cashier console...</p>
           </div>
         </div>
-        <Card>
-          <CardContent className="py-12">
-            <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground">
-              <RefreshCw className="w-8 h-8 animate-spin text-muted-foreground/50" />
+        <Card className="gap-2 py-3">
+          <CardContent className="py-8">
+            <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+              <RefreshCw className="h-7 w-7 animate-spin text-muted-foreground/50" />
               <p className="text-sm">Loading interface...</p>
             </div>
           </CardContent>
@@ -416,22 +416,28 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
   }
 
   return (
-      <div className="space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold">Orders</h1>
             <p className="text-muted-foreground">
               Manage orders and verify confirmation codes
             </p>
           </div>
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground sm:justify-end">
+              <Badge variant="outline" className="font-normal">In {incomingCount}</Badge>
+              <Badge variant="outline" className="font-normal">Await {awaitingCount}</Badge>
+              <Badge variant="outline" className="font-normal">Pend {pendingCount}</Badge>
+            </div>
             <div className="flex items-center gap-3">
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => setShowCounterOrderModal(true)}
-            >
-              + Counter Order
-            </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setShowCounterOrderModal(true)}
+              >
+                + Counter Order
+              </Button>
               {autoRefresh && (
                 <Badge variant="outline" className="gap-1.5 text-muted-foreground">
                   <span className="relative flex h-2 w-2">
@@ -441,30 +447,18 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                   Live
                 </Badge>
               )}
+            </div>
           </div>
         </div>
 
       {/* Orders Table */}
-      <Card>
-          <CardHeader className="space-y-4">
-            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <div>
-                <CardTitle>Orders</CardTitle>
-                <CardDescription>
-                  View and manage all orders
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant="outline">Incoming: {incomingCount}</Badge>
-                <Badge variant="outline">Awaiting: {awaitingCount}</Badge>
-                <Badge variant="outline">Pending: {pendingCount}</Badge>
-              </div>
-            </div>
-
-            <div className="rounded-xl border bg-muted/30 p-3 space-y-3">
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <Card className="gap-2 py-3 sm:gap-2.5 sm:py-4">
+          <CardHeader className="space-y-0 px-4 pb-2 pt-2 sm:px-5">
+            <div className="rounded-md border border-border/70 bg-muted/20 p-1.5 sm:p-2">
+              <div className="flex flex-col gap-1.5 xl:flex-row xl:items-center xl:gap-2">
+                <div className="grid min-w-0 grid-cols-2 gap-1.5 sm:grid-cols-4 xl:flex-1">
                 <Select value={tableFilter} onValueChange={setTableFilter}>
-                  <SelectTrigger className="h-11 w-full">
+                  <SelectTrigger className="h-9 w-full text-sm shadow-sm">
                     <SelectValue placeholder="Table" />
                   </SelectTrigger>
                   <SelectContent>
@@ -475,7 +469,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                   </SelectContent>
                 </Select>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-11 w-full">
+                  <SelectTrigger className="h-9 w-full text-sm shadow-sm">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -488,7 +482,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                   </SelectContent>
                 </Select>
                 <Select value={timeFilter} onValueChange={setTimeFilter}>
-                  <SelectTrigger className="h-11 w-full">
+                  <SelectTrigger className="h-9 w-full text-sm shadow-sm">
                     <SelectValue placeholder="Time" />
                   </SelectTrigger>
                   <SelectContent>
@@ -499,7 +493,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                   </SelectContent>
                 </Select>
                 <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                  <SelectTrigger className="h-11 w-full">
+                  <SelectTrigger className="h-9 w-full text-sm shadow-sm">
                     <SelectValue placeholder="Source" />
                   </SelectTrigger>
                   <SelectContent>
@@ -509,13 +503,13 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex w-full flex-wrap items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5 xl:flex-nowrap xl:justify-end">
                 <Label htmlFor="confirmation-code" className="sr-only">
                   Confirmation Code
                 </Label>
                 <Input
                   id="confirmation-code"
-                  placeholder="Search code"
+                  placeholder="Code…"
                   value={searchCode}
                   onChange={e => {
                     setSearchCode(e.target.value.toUpperCase())
@@ -523,25 +517,25 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                     if (!e.target.value.trim()) setSearchResultId(null)
                   }}
                   onKeyDown={e => e.key === 'Enter' && handleVerifyCode()}
-                  className="h-11 min-w-[220px] flex-1"
+                  className="h-9 min-w-0 flex-1 text-sm sm:min-w-[12rem] xl:max-w-[11rem] xl:flex-initial"
                   autoCapitalize="characters"
                   autoComplete="off"
                 />
                 <Button
                   variant="outline"
-                  size="default"
+                  size="sm"
                   onClick={handleVerifyCode}
                   disabled={!searchCode.trim()}
-                  className="h-11"
+                  className="h-9 shrink-0 gap-1.5 px-2.5 sm:px-3"
                 >
-                  <Search className="w-4 h-4 mr-2" />
-                  Search
+                  <Search className="h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline">Search</span>
                 </Button>
                 {searchResultId && (
                   <Button
                     variant="ghost"
-                    size="default"
-                    className="h-11"
+                    size="sm"
+                    className="h-9 shrink-0 px-2 sm:px-3"
                     onClick={() => {
                       setSearchResultId(null)
                       setSearchCode('')
@@ -552,9 +546,10 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                   </Button>
                 )}
                 <Button
-                  variant="ghost"
-                  size="default"
-                  className="h-11 inline-flex items-center gap-1"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 shrink-0 gap-1 px-2 sm:px-3"
+                  title="Reset table, status, time, and source filters"
                   onClick={() => {
                     setTableFilter('all')
                     setStatusFilter('all')
@@ -562,20 +557,21 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                     setSourceFilter('all')
                   }}
                 >
-                  <Filter className="w-3.5 h-3.5" />
-                  Reset Filters
+                  <Filter className="h-3.5 w-3.5 shrink-0" />
+                  <span className="hidden sm:inline">Reset</span>
                 </Button>
               </div>
+              </div>
               {verifyError && (
-                <Alert variant="destructive">
+                <Alert variant="destructive" className="mt-1.5 py-2">
                   <AlertDescription>{verifyError}</AlertDescription>
                 </Alert>
               )}
             </div>
           </CardHeader>
-          <CardContent>
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-3">
+          <CardContent className="px-4 pb-3 pt-0 sm:px-5">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-1.5">
+              <TabsList className="grid h-8 w-full grid-cols-3 text-xs sm:text-sm [&_[data-slot=tabs-trigger]]:py-0">
                 <TabsTrigger value="incoming">
                   Incoming
                   {incomingCount > 0 && (
@@ -588,51 +584,51 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                 <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
               </TabsList>
 
-              <TabsContent value={activeTab} className="mt-4">
+              <TabsContent value={activeTab} className="mt-2">
                 {activeTab === 'incoming' && enableBulkActions && (
-                  <div className="mb-4 rounded-xl border bg-muted/20 p-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="text-sm text-muted-foreground font-medium">
+                  <div className="mb-2 rounded-lg border bg-muted/20 p-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-xs font-medium text-muted-foreground sm:text-sm">
                       {selectedOrderIds.length > 0
                         ? `${selectedOrderIds.length} order(s) selected`
                         : 'Bulk actions ready'}
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-1.5">
                       <Button
-                        size="default"
+                        size="sm"
                         variant="outline"
-                        className="h-10"
+                        className="h-8 text-xs sm:text-sm"
                         onClick={() => setSelectedOrderIds(displayedOrders.map((o) => o.id))}
                       >
                         Select Visible
                       </Button>
                       <Button
-                        size="default"
+                        size="sm"
                         variant="outline"
-                        className="h-10"
+                        className="h-8 text-xs sm:text-sm"
                         onClick={() => setSelectedOrderIds([])}
                       >
                         Clear
                       </Button>
                       <Button
-                        size="default"
-                        className="h-10"
+                        size="sm"
+                        className="h-8 text-xs sm:text-sm"
                         onClick={() => handleBulkStatusUpdate('confirmed')}
                         disabled={selectedOrderIds.length === 0 || isBulkUpdating}
                       >
                         Confirm Selected
                       </Button>
                       <Button
-                        size="default"
-                        className="h-10"
+                        size="sm"
+                        className="h-8 text-xs sm:text-sm"
                         onClick={() => handleBulkStatusUpdate('completed')}
                         disabled={selectedOrderIds.length === 0 || isBulkUpdating}
                       >
                         Complete Selected
                       </Button>
                       <Button
-                        size="default"
+                        size="sm"
                         variant="destructive"
-                        className="h-10"
+                        className="h-8 text-xs sm:text-sm"
                         onClick={() => handleBulkStatusUpdate('cancelled')}
                         disabled={selectedOrderIds.length === 0 || isBulkUpdating}
                       >
@@ -642,7 +638,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                   </div>
                 )}
                 {loadError && (
-                  <Alert variant="destructive" className="mb-4">
+                  <Alert variant="destructive" className="mb-2 py-2">
                     <AlertDescription className="flex items-center justify-between gap-2">
                       <span>{loadError}</span>
                       <Button
@@ -660,7 +656,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                   </Alert>
                 )}
                 {statusUpdateError && (
-                  <Alert variant="destructive" className="mb-4">
+                  <Alert variant="destructive" className="mb-2 py-2">
                     <AlertDescription className="flex items-center justify-between gap-2">
                       <span>{statusUpdateError}</span>
                       <Button
@@ -675,17 +671,17 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                   </Alert>
                 )}
                 {isLoading ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-                    <RefreshCw className="w-8 h-8 animate-spin text-muted-foreground/50" />
+                  <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
+                    <RefreshCw className="h-7 w-7 animate-spin text-muted-foreground/50" />
                     <p className="text-sm">Loading orders...</p>
                   </div>
                 ) : displayedOrders.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-                    <Inbox className="w-12 h-12 text-muted-foreground/30" />
+                  <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
+                    <Inbox className="h-9 w-9 text-muted-foreground/30 sm:h-10 sm:w-10" />
                     <p className="text-sm">{searchResultId ? 'No matching order found' : 'No orders in this view'}</p>
                   </div>
                 ) : (
-                  <ScrollArea className="h-[calc(100dvh-20rem)] min-h-[420px] max-h-[70dvh]">
+                  <ScrollArea className="h-[calc(100dvh-18rem)] min-h-[260px] max-h-[65dvh] sm:min-h-[320px]">
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                       {displayedOrders.map((order) => (
                         <Card

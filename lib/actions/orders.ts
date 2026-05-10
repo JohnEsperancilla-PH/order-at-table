@@ -3,6 +3,7 @@
 import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import { getRestaurantBySlug } from './restaurants'
+import { getCachedMenuCategories, getCachedMenuItems } from '@/lib/cache/menu-catalog'
 
 type AuditActorType = 'system' | 'cashier' | 'admin'
 
@@ -104,104 +105,30 @@ export async function getTableByRestaurantSlugAndNumber(restaurantSlug: string, 
 }
 
 export async function getMenuItems(restaurantId: string, includeUnavailable = false) {
-  const supabase = createServiceClient()
-  
-  let query = supabase
-    .from('menu_items')
-    .select('*, menu_categories(*)')
-    .eq('restaurant_id', restaurantId)
-    .order('display_order', { ascending: true })
-
-  if (!includeUnavailable) {
-    query = query.eq('is_available', true)
-  }
-
-  const { data, error } = await query
-
-  if (error) {
-    throw new Error(`Failed to fetch menu: ${error.message}`)
-  }
-
-  return data || []
+  return getCachedMenuItems(restaurantId, includeUnavailable)
 }
 
 export async function getMenuCategories(restaurantId: string, includeInactive = false) {
-  const supabase = createServiceClient()
-
-  let query = supabase
-    .from('menu_categories')
-    .select('*')
-    .eq('restaurant_id', restaurantId)
-    .order('display_order', { ascending: true })
-
-  if (!includeInactive) {
-    query = query.eq('is_active', true)
-  }
-
-  const { data, error } = await query
-
-  if (error) {
-    throw new Error(`Failed to fetch categories: ${error.message}`)
-  }
-
-  return data || []
+  return getCachedMenuCategories(restaurantId, includeInactive)
 }
 
 // Slug-based menu functions for cashier/admin
 export async function getMenuItemsByRestaurantSlug(restaurantSlug: string, includeUnavailable = false) {
-  // Get restaurant to verify it exists and get its ID
   const restaurant = await getRestaurantBySlug(restaurantSlug)
   if (!restaurant) {
     return []
   }
 
-  const supabase = createServiceClient()
-  
-  let query = supabase
-    .from('menu_items')
-    .select('*, menu_categories(*)')
-    .eq('restaurant_id', restaurant.id)
-    .order('display_order', { ascending: true })
-
-  if (!includeUnavailable) {
-    query = query.eq('is_available', true)
-  }
-
-  const { data, error } = await query
-
-  if (error) {
-    throw new Error(`Failed to fetch menu: ${error.message}`)
-  }
-
-  return data || []
+  return getCachedMenuItems(restaurant.id, includeUnavailable)
 }
 
 export async function getMenuCategoriesByRestaurantSlug(restaurantSlug: string, includeInactive = false) {
-  // Get restaurant to verify it exists and get its ID
   const restaurant = await getRestaurantBySlug(restaurantSlug)
   if (!restaurant) {
     return []
   }
 
-  const supabase = createServiceClient()
-
-  let query = supabase
-    .from('menu_categories')
-    .select('*')
-    .eq('restaurant_id', restaurant.id)
-    .order('display_order', { ascending: true })
-
-  if (!includeInactive) {
-    query = query.eq('is_active', true)
-  }
-
-  const { data, error } = await query
-
-  if (error) {
-    throw new Error(`Failed to fetch categories: ${error.message}`)
-  }
-
-  return data || []
+  return getCachedMenuCategories(restaurant.id, includeInactive)
 }
 
 export async function getActiveOrder(tableId: string) {

@@ -28,6 +28,20 @@ interface OrderPageClientProps {
   restaurantSlug: string
 }
 
+function CartToastBubble({ message }: { message: string }) {
+  const removed = message.endsWith('removed from cart')
+  const Icon = removed ? Trash2 : CheckCircle2
+  return (
+    <div
+      role="status"
+      className="flex items-center gap-3 rounded-xl bg-foreground px-4 py-3 text-background shadow-xl motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-200 dark:bg-neutral-950"
+    >
+      <Icon className="h-5 w-5 shrink-0 opacity-90" aria-hidden />
+      <span className="text-sm font-medium">{message}</span>
+    </div>
+  )
+}
+
 export function OrderPageClient({
   table,
   categories,
@@ -181,7 +195,16 @@ export function OrderPageClient({
   }
 
   const removeFromCart = (lineId: string) => {
-    setCart(prev => prev.filter(ci => ci.lineId !== lineId))
+    let toast: string | null = null
+    setCart(prev => {
+      const line = prev.find(ci => ci.lineId === lineId)
+      if (line) {
+        const modText = line.modifier ? ` (${line.modifier.name})` : ''
+        toast = `${line.menu_item.name}${modText} removed from cart`
+      }
+      return prev.filter(ci => ci.lineId !== lineId)
+    })
+    if (toast) setAddedMessage(toast)
   }
 
   const updateQuantity = (lineId: string, quantity: number) => {
@@ -297,12 +320,12 @@ export function OrderPageClient({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 pb-24 md:flex md:items-center md:justify-center md:px-6 md:py-8 md:pb-8">
-      <div className="max-w-md mx-auto space-y-6 p-4 md:h-[840px] md:w-[28rem] md:max-h-[calc(100dvh-4rem)] md:overflow-hidden md:rounded-[28px] md:border md:bg-background md:shadow-2xl md:flex md:flex-col">
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:flex md:items-center md:justify-center md:px-6 md:py-8 md:pb-8">
+      <div className="mx-auto max-w-md space-y-5 p-4 sm:p-5 md:h-[840px] md:w-[28rem] md:max-h-[calc(100dvh-4rem)] md:overflow-hidden md:rounded-[28px] md:border md:bg-background md:shadow-2xl md:flex md:flex-col">
         {/* Hero with restaurant info overlay - mobile-optimized aspect ratio */}
-        <div className="relative overflow-hidden rounded-2xl">
+        <div className="relative overflow-hidden rounded-2xl ring-1 ring-black/5 dark:ring-white/10">
           <div
-              className="h-[clamp(140px,30dvh,260px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+              className="h-[clamp(70px,15dvh,130px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
             style={table.restaurants?.cover_image_url ? {
               backgroundImage: `url(${table.restaurants.cover_image_url})`,
               backgroundSize: 'cover',
@@ -310,8 +333,8 @@ export function OrderPageClient({
             } : undefined}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-          <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
-            <h1 className="text-xl sm:text-2xl font-bold drop-shadow-md">
+          <div className="absolute bottom-0 left-0 right-0 p-4 pb-5 text-white">
+            <h1 className="text-xl font-bold tracking-tight drop-shadow-md sm:text-2xl">
               {table.restaurants?.name || 'Sample Restaurant'}
             </h1>
             <p className="text-white/80 text-sm mt-1">
@@ -321,24 +344,15 @@ export function OrderPageClient({
         </div>
 
         {customerName && (
-          <div className="text-center py-2">
-            <p className="text-xl font-bold text-foreground">
+          <div className="py-1 text-center">
+            <p className="text-lg font-semibold tracking-tight text-foreground">
               Welcome, {customerName}!
             </p>
           </div>
         )}
 
         {/* Single column layout for all screen sizes */}
-        <div className="space-y-4 md:flex-1 md:min-h-0 md:overflow-y-auto md:pr-1">
-          {addedMessage && (
-            <div className="fixed top-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 animate-in slide-in-from-top-2 fade-in duration-200">
-              <div className="flex items-center gap-3 bg-primary text-primary-foreground px-4 py-3 rounded-xl shadow-lg">
-                <CheckCircle2 className="w-5 h-5 shrink-0" />
-                <span className="text-sm font-medium">{addedMessage}</span>
-              </div>
-            </div>
-          )}
-
+        <div className="guest-overscroll-contain space-y-4 md:flex-1 md:min-h-0 md:overflow-y-auto md:pr-1">
           {/* Menu Items by Category - Mobile-optimized */}
           <MenuAccordion
             categories={categories}
@@ -349,9 +363,15 @@ export function OrderPageClient({
           />
         </div>
 
+        {addedMessage != null && !isCartOpen ? (
+          <div className="hidden shrink-0 md:block">
+            <CartToastBubble message={addedMessage} />
+          </div>
+        ) : null}
+
         <div className="hidden border-t border-border/60 pt-3 md:block">
           <Button
-            className="h-12 w-full rounded-xl text-base transition-transform active:scale-[0.98] shadow-lg"
+            className="h-12 w-full rounded-xl text-base shadow-lg touch-manipulation motion-safe:transition-transform motion-safe:active:scale-[0.99]"
             size="lg"
             onClick={() => setIsCartOpen(true)}
             disabled={cartItemCount === 0}
@@ -370,129 +390,154 @@ export function OrderPageClient({
         </div>
       </div>
 
-      {/* Fixed cart button for all screen sizes - 9:16 optimized */}
-      <div className="fixed bottom-0 left-1/2 z-40 w-full max-w-md -translate-x-1/2 border-t bg-background/90 p-3 backdrop-blur-lg md:hidden">
-        <Button
-          className="w-full rounded-xl h-12 text-base transition-transform active:scale-[0.98] shadow-lg"
-          size="lg"
-          onClick={() => setIsCartOpen(true)}
-          disabled={cartItemCount === 0}
-        >
-          <ShoppingCart className="w-5 h-5 mr-2" />
-          {cartItemCount > 0 ? (
-            <span className="flex items-center gap-2">
-              View Cart ({cartItemCount})
-              <span className="text-primary-foreground/70">&middot;</span>
-              <span>{formatCurrency(subtotal)}</span>
-            </span>
-          ) : (
-            'Cart is empty'
-          )}
-        </Button>
+      {/* Fixed cart bar + stacked “added” toast directly above View Cart (mobile) */}
+      <div className="pointer-events-none fixed bottom-0 left-1/2 z-40 flex w-full max-w-md -translate-x-1/2 flex-col gap-2 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-2 md:hidden">
+        {addedMessage != null && !isCartOpen ? (
+          <div className="pointer-events-auto">
+            <CartToastBubble message={addedMessage} />
+          </div>
+        ) : null}
+        <div className="pointer-events-auto border-t border-border/70 bg-background/90 pt-2.5 backdrop-blur-lg rounded-t-xl">
+          <Button
+            className="h-12 w-full touch-manipulation rounded-xl text-base shadow-lg motion-safe:transition-transform motion-safe:active:scale-[0.99]"
+            size="lg"
+            onClick={() => setIsCartOpen(true)}
+            disabled={cartItemCount === 0}
+          >
+            <ShoppingCart className="mr-2 h-5 w-5" />
+            {cartItemCount > 0 ? (
+              <span className="flex items-center gap-2">
+                View Cart ({cartItemCount})
+                <span className="text-primary-foreground/70">&middot;</span>
+                <span>{formatCurrency(subtotal)}</span>
+              </span>
+            ) : (
+              'Cart is empty'
+            )}
+          </Button>
+        </div>
       </div>
           <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
             <SheetContent
               side="bottom"
-              className="!h-auto max-h-[85vh] max-w-md rounded-t-2xl md:bottom-[calc(50%-420px+0.75rem)] md:left-1/2 md:w-[calc(28rem-1.5rem)] md:max-w-[calc(28rem-1.5rem)] md:-translate-x-1/2 md:rounded-2xl md:border md:shadow-2xl"
+              className="!h-auto max-h-[85vh] max-w-md rounded-t-2xl pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] md:bottom-[calc(50%-420px+0.75rem)] md:left-1/2 md:w-[calc(28rem-1.5rem)] md:max-w-[calc(28rem-1.5rem)] md:-translate-x-1/2 md:rounded-2xl md:border md:shadow-2xl"
             >
-              <SheetHeader>
-                <SheetTitle className="flex items-center gap-2">
+              <SheetHeader className="gap-1.5 pr-12 pb-3">
+                <SheetTitle className="flex items-center gap-2 text-lg font-bold tracking-tight">
                   <span>Your Cart</span>
-                  <Badge variant="secondary">{cartItemCount}</Badge>
+                  <Badge variant="secondary" className="h-6 min-w-6 px-1.5 text-xs font-semibold tabular-nums">
+                    {cartItemCount}
+                  </Badge>
                 </SheetTitle>
-                <SheetDescription>Review your items before placing the order.</SheetDescription>
+                <SheetDescription className="text-sm leading-snug text-foreground/70">
+                  Review your items before placing the order.
+                </SheetDescription>
               </SheetHeader>
-              <div className="px-4 pb-4">
+              <div className="guest-overscroll-contain flex flex-col px-4 pb-4 sm:px-5">
                 {cart.length === 0 ? (
-                  <div className="text-center py-10 space-y-3">
-                    <ShoppingBag className="w-12 h-12 mx-auto text-muted-foreground/40" />
-                    <p className="text-muted-foreground text-sm">Your cart is empty</p>
+                  <div className="space-y-3 py-10 text-center">
+                    <ShoppingBag className="mx-auto h-12 w-12 text-muted-foreground/40" />
+                    <p className="text-sm text-muted-foreground">Your cart is empty</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    <ScrollArea className="max-h-[45vh]">
-                      <div className="space-y-1">
-                        {cart.map(item => {
-                          const itemPrice = lineUnitPrice(item)
-                          const lineTotal = itemPrice * item.quantity
+                  <ScrollArea className="guest-overscroll-contain max-h-[45vh]">
+                    <div className="space-y-2 pb-2">
+                      {cart.map(item => {
+                        const itemPrice = lineUnitPrice(item)
+                        const lineTotal = itemPrice * item.quantity
 
-                          return (
-                            <div key={item.lineId} className="rounded-lg border border-border/60 p-2.5 space-y-2">
-                              <div className="flex items-start gap-3">
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-sm leading-tight">{item.menu_item.name}</p>
-                                  {item.modifier && (
-                                    <p className="text-[11px] text-primary font-medium">{item.modifier.name}</p>
-                                  )}
-                                  <p className="text-xs text-muted-foreground mt-0.5">
-                                    {formatCurrency(itemPrice)} &times; {item.quantity} ={' '}
-                                    <span className="font-semibold text-foreground">
-                                      {formatCurrency(lineTotal)}
-                                    </span>
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  <Button
-                                    size="icon"
-                                    variant="outline"
-                                    className="h-8 w-8 rounded-full"
-                                    aria-label={`Decrease quantity for ${item.menu_item.name}`}
-                                    onClick={() => updateQuantity(item.lineId, item.quantity - 1)}
-                                  >
-                                    <Minus className="w-3 h-3" />
-                                  </Button>
-                                  <span className="w-6 text-center text-sm font-semibold tabular-nums">
-                                    {item.quantity}
+                        return (
+                          <div key={item.lineId} className="space-y-2.5 rounded-xl border border-border/60 p-3.5">
+                            <div className="flex items-start gap-2.5">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold leading-snug">{item.menu_item.name}</p>
+                                {item.modifier && (
+                                  <p className="mt-0.5 text-sm font-medium text-primary">{item.modifier.name}</p>
+                                )}
+                                <p className="mt-1 text-xs leading-snug text-foreground/80 sm:text-[13px]">
+                                  <span className="tabular-nums text-muted-foreground">
+                                    {formatCurrency(itemPrice)} × {item.quantity}
                                   </span>
-                                  <Button
-                                    size="icon"
-                                    variant="outline"
-                                    className="h-8 w-8 rounded-full"
-                                    aria-label={`Increase quantity for ${item.menu_item.name}`}
-                                    onClick={() => updateQuantity(item.lineId, item.quantity + 1)}
-                                  >
-                                    <Plus className="w-3 h-3" />
-                                  </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                    aria-label={`Remove ${item.menu_item.name} from cart`}
-                                    onClick={() => removeFromCart(item.lineId)}
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </Button>
-                                </div>
+                                  <span className="mx-1.5 text-muted-foreground">=</span>
+                                  <span className="font-semibold tabular-nums text-foreground">
+                                    {formatCurrency(lineTotal)}
+                                  </span>
+                                </p>
                               </div>
-                              <div>
-                                <Label className="text-[11px] text-muted-foreground">
-                                  Allergies &amp; special requests
-                                </Label>
-                                <Textarea
-                                  value={item.special_instructions ?? ''}
-                                  onChange={e => setLineSpecialInstructions(item.lineId, e.target.value)}
-                                  placeholder="Optional — e.g. nut allergy, no dairy, cooking preference"
-                                  className="mt-1 min-h-[64px] resize-none text-xs"
-                                />
+                              <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-10 w-10 touch-manipulation rounded-full sm:h-9 sm:w-9"
+                                  aria-label={`Decrease quantity for ${item.menu_item.name}`}
+                                  onClick={() => updateQuantity(item.lineId, item.quantity - 1)}
+                                >
+                                  <Minus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                </Button>
+                                <span className="min-w-[1.5rem] text-center text-sm font-bold tabular-nums">
+                                  {item.quantity}
+                                </span>
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-10 w-10 touch-manipulation rounded-full sm:h-9 sm:w-9"
+                                  aria-label={`Increase quantity for ${item.menu_item.name}`}
+                                  onClick={() => updateQuantity(item.lineId, item.quantity + 1)}
+                                >
+                                  <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-10 w-10 touch-manipulation text-muted-foreground hover:text-destructive sm:h-9 sm:w-9"
+                                  aria-label={`Remove ${item.menu_item.name} from cart`}
+                                  onClick={() => removeFromCart(item.lineId)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
                               </div>
                             </div>
-                          )
-                        })}
-                      </div>
-                    </ScrollArea>
+                            <div>
+                              <Label className="text-xs font-medium text-foreground/90 sm:text-sm">
+                                Allergies &amp; special requests
+                              </Label>
+                              <Textarea
+                                value={item.special_instructions ?? ''}
+                                onChange={e => setLineSpecialInstructions(item.lineId, e.target.value)}
+                                placeholder="Optional — e.g. nut allergy, no dairy, cooking preference"
+                                className="mt-1.5 min-h-[68px] resize-none text-sm leading-normal placeholder:text-muted-foreground/70"
+                              />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </ScrollArea>
+                )}
+
+                {addedMessage != null && isCartOpen ? (
+                  <div className="shrink-0 pt-2">
+                    <CartToastBubble message={addedMessage} />
+                  </div>
+                ) : null}
+
+                {cart.length > 0 ? (
+                  <div className="mt-2 space-y-4">
                     <Separator />
                     <div className="space-y-1.5 pt-1">
-                      <div className="flex justify-between text-sm text-muted-foreground">
-                        <span>{cartItemCount} {cartItemCount === 1 ? 'item' : 'items'}</span>
-                        <span>{formatCurrency(subtotal)}</span>
+                      <div className="flex justify-between text-sm text-foreground/80">
+                        <span>
+                          {cartItemCount} {cartItemCount === 1 ? 'item' : 'items'}
+                        </span>
+                        <span className="tabular-nums font-medium">{formatCurrency(subtotal)}</span>
                       </div>
-                      <div className="flex justify-between font-bold text-lg">
+                      <div className="flex justify-between text-lg font-bold">
                         <span>Total</span>
                         <span>{formatCurrency(subtotal)}</span>
                       </div>
                     </div>
                     <Button
-                      className="w-full rounded-xl h-12 text-base transition-transform active:scale-[0.98]"
+                      className="h-11 w-full touch-manipulation rounded-xl text-sm font-semibold motion-safe:transition-transform motion-safe:active:scale-[0.99] sm:h-12 sm:text-base"
                       size="lg"
                       onClick={handleOpenConfirm}
                       disabled={cart.length === 0 || isSubmitting}
@@ -500,7 +545,7 @@ export function OrderPageClient({
                       Confirm Order &middot; {formatCurrency(subtotal)}
                     </Button>
                   </div>
-                )}
+                ) : null}
               </div>
             </SheetContent>
           </Sheet>
@@ -599,7 +644,7 @@ export function OrderPageClient({
               <Button
                 onClick={handleConfirmOrder}
                 disabled={isSubmitting || cart.length === 0}
-                className="flex-1 rounded-xl h-11 transition-transform active:scale-[0.97]"
+                className="flex-1 h-11 touch-manipulation rounded-xl motion-safe:transition-transform motion-safe:active:scale-[0.98]"
               >
                 {isSubmitting ? 'Placing Order...' : `Place Order · ${formatCurrency(subtotal)}`}
               </Button>
@@ -646,7 +691,7 @@ export function OrderConfirmationView({
         {/* Compact hero - mobile optimized */}
         <div className="relative overflow-hidden rounded-xl">
           <div
-            className="h-[clamp(140px,30dvh,260px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+            className="h-[clamp(70px,15dvh,130px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
             style={coverImageUrl ? { 
               backgroundImage: `url(${coverImageUrl})`, 
               backgroundSize: 'cover', 

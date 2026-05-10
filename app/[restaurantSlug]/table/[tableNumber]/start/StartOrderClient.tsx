@@ -51,7 +51,7 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
       {/* Hero header — matches table landing page */}
       <div className="relative overflow-hidden">
         <div
-          className="h-[clamp(140px,30dvh,260px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+          className="h-[clamp(70px,15dvh,130px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
           style={restaurantCoverImage ? {
             backgroundImage: `url(${restaurantCoverImage})`,
             backgroundSize: 'cover',
@@ -70,9 +70,9 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
       </div>
 
       {/* Name entry */}
-      <div className="flex-1 px-4 pb-6 -mt-4 relative z-10">
+      <div className="flex-1 px-4 sm:px-5 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] -mt-4 relative z-10">
         <div className="max-w-md mx-auto">
-          <div className={`bg-background border rounded-xl p-6 space-y-6 transition-all duration-500 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+          <div className={`bg-background border rounded-xl p-5 sm:p-6 space-y-6 motion-safe:transition-[opacity,transform] motion-safe:duration-500 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
             <div className="text-center space-y-1">
               <h2 className="text-xl font-semibold">Who&apos;s ordering?</h2>
               <p className="text-sm text-muted-foreground">Table {tableNumber}</p>

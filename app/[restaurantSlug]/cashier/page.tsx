@@ -1,6 +1,6 @@
 import { getAllOrdersByRestaurantSlug, getMenuItemsByRestaurantSlug } from '@/lib/actions/orders'
 import { getTablesByRestaurantSlug } from '@/lib/actions/tables'
-import { getModifiersForMenuItems } from '@/lib/actions/modifiers'
+import { getModifiersForRestaurant } from '@/lib/actions/modifiers'
 import { getRestaurantBySlug } from '@/lib/actions/restaurants'
 import { AdminDashboardClient } from './admin-client'
 import { notFound } from 'next/navigation'
@@ -24,8 +24,7 @@ export default async function CashierPage({
     getMenuItemsByRestaurantSlug(restaurantSlug, true),
   ])
 
-  const menuItemIds = menuItems.map((item: any) => item.id)
-  const modifiersByMenuItem = await getModifiersForMenuItems(menuItemIds)
+  const modifiersByMenuItem = await getModifiersForRestaurant(restaurant.id)
 
   const menuItemsWithModifiers = menuItems.map((item: any) => ({
     ...item,

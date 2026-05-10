@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, type ChangeEvent } from 'react'
+import { useSyncedInitial } from '@/hooks/use-synced-initial'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -19,7 +20,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Separator } from '@/components/ui/separator'
 import { formatCurrency } from '@/lib/utils'
 import {
   createMenuItem,
@@ -28,20 +28,92 @@ import {
   deleteMenuItem,
 } from '@/lib/actions/menu'
 import {
-  addMenuItemModifier,
+  addMenuItemModifiersBatch,
   deleteMenuItemModifier,
   getModifiersForMenuItem,
+  getModifiersForRestaurant,
 } from '@/lib/actions/modifiers'
+import {
+  listModifierPresets,
+  createModifierPreset,
+  updateModifierPreset,
+  deleteModifierPreset,
+  type ModifierPreset,
+} from '@/lib/actions/modifier-presets'
 import { getMenuCategoriesByRestaurantSlug, getMenuItemsByRestaurantSlug } from '@/lib/actions/orders'
 import { MenuCategory } from '@/lib/types'
-import { CheckCircle2, XCircle, RefreshCw, Plus, Edit, Trash2, UtensilsCrossed, Image as ImageIcon } from 'lucide-react'
+import {
+  CheckCircle2,
+  XCircle,
+  RefreshCw,
+  Plus,
+  Edit,
+  Trash2,
+  UtensilsCrossed,
+  Image as ImageIcon,
+  Save,
+  SlidersHorizontal,
+} from 'lucide-react'
 import { uploadMenuItemImage } from '@/lib/actions/storage'
+
+type ModifierDraftRow = { id: string; name: string; priceDelta: string }
+
+function newDraftId(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `d_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+}
+
+function createModifierDraftRow(): ModifierDraftRow {
+  return {
+    id: newDraftId(),
+    name: '',
+    priceDelta: '',
+  }
+}
+
+function draftRowFromPreset(preset: ModifierPreset): ModifierDraftRow {
+  const pm =
+    typeof preset.price_modifier === 'number' && Number.isFinite(preset.price_modifier)
+      ? preset.price_modifier
+      : 0
+  return {
+    id: newDraftId(),
+    name: String(preset.name ?? '').trim(),
+    priceDelta: String(pm),
+  }
+}
+
+type ModifierDraftParseResult =
+  | { ok: true; modifiers: Array<{ name: string; price_modifier: number }> }
+  | { ok: false; error: string }
+
+function parseModifierDraftRows(rows: ModifierDraftRow[]): ModifierDraftParseResult {
+  for (const r of rows) {
+    if (!r.name.trim() && r.priceDelta.trim() !== '') {
+      return { ok: false, error: 'Enter a label for every row that has a price.' }
+    }
+  }
+  const modifiers: Array<{ name: string; price_modifier: number }> = []
+  for (const r of rows) {
+    const name = r.name.trim()
+    if (!name) continue
+    const raw = r.priceDelta.trim()
+    const delta = Number.parseFloat(raw === '' ? '0' : raw)
+    if (Number.isNaN(delta)) {
+      return { ok: false, error: `Invalid price for “${name}”. Use a number (0 for no change).` }
+    }
+    modifiers.push({ name, price_modifier: delta })
+  }
+  return { ok: true, modifiers }
+}
 
 interface MenuManagementClientProps {
   categories: MenuCategory[]
   menuItems: any[]
   restaurantSlug: string
   restaurantId: string
+  initialModifierPresets: ModifierPreset[]
 }
 
 export function MenuManagementClient({
@@ -49,10 +121,12 @@ export function MenuManagementClient({
   menuItems: initialMenuItems,
   restaurantSlug,
   restaurantId,
+  initialModifierPresets,
 }: MenuManagementClientProps) {
   const router = useRouter()
   const [updatingItems, setUpdatingItems] = useState<Set<string>>(new Set())
   const [menuItems, setMenuItems] = useState(initialMenuItems)
+  const [modifierPresets, setModifierPresets] = useSyncedInitial(initialModifierPresets)
   const [categoryList, setCategoryList] = useState(categories)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(true)
@@ -72,8 +146,20 @@ export function MenuManagementClient({
   const [deleteItemName, setDeleteItemName] = useState<string | null>(null)
   const [toggleError, setToggleError] = useState<string | null>(null)
   const [modifiers, setModifiers] = useState<any[]>([])
-  const [modifierName, setModifierName] = useState('')
-  const [modifierPriceDelta, setModifierPriceDelta] = useState('')
+  const [modifierDraftRows, setModifierDraftRows] = useState<ModifierDraftRow[]>([])
+  const [isPresetImportDialogOpen, setIsPresetImportDialogOpen] = useState(false)
+  const [presetImportSelection, setPresetImportSelection] = useState<string[]>([])
+  const [isPresetDialogOpen, setIsPresetDialogOpen] = useState(false)
+  const [editingPreset, setEditingPreset] = useState<ModifierPreset | null>(null)
+  const [presetFormName, setPresetFormName] = useState('')
+  const [presetFormPrice, setPresetFormPrice] = useState('')
+  const [presetFormError, setPresetFormError] = useState<string | null>(null)
+  const [presetSaving, setPresetSaving] = useState(false)
+  const [isPresetDeleteDialogOpen, setIsPresetDeleteDialogOpen] = useState(false)
+  const [deletePresetId, setDeletePresetId] = useState<string | null>(null)
+  const [deletePresetName, setDeletePresetName] = useState<string | null>(null)
+  const [presetDeleteError, setPresetDeleteError] = useState<string | null>(null)
+  const [isSavingModifiers, setIsSavingModifiers] = useState(false)
   const [isNewItem, setIsNewItem] = useState(false)
   const [isSavingItem, setIsSavingItem] = useState(false)
 
@@ -85,19 +171,18 @@ export function MenuManagementClient({
         getMenuCategoriesByRestaurantSlug(restaurantSlug, true),
       ])
       
-      const itemsWithModifiers = await Promise.all(
-        items.map(async (item: any) => {
-          try {
-            const itemModifiers = await getModifiersForMenuItem(item.id)
-            return { ...item, modifiers: itemModifiers }
-          } catch {
-            return { ...item, modifiers: [] }
-          }
-        })
-      )
+      const [modifiersMap, presets] = await Promise.all([
+        getModifiersForRestaurant(restaurantId),
+        listModifierPresets(restaurantId),
+      ])
+      const itemsWithModifiers = items.map((item: any) => ({
+        ...item,
+        modifiers: modifiersMap[item.id] || [],
+      }))
 
       setMenuItems(itemsWithModifiers)
       setCategoryList(categoriesData)
+      setModifierPresets(presets)
     } catch (error) {
       console.error('Failed to refresh menu items:', error)
     } finally {
@@ -168,8 +253,9 @@ export function MenuManagementClient({
     setItemImageFile(null)
     setItemImagePreview(null)
     setModifiers([])
-    setModifierName('')
-    setModifierPriceDelta('')
+    setModifierDraftRows([createModifierDraftRow()])
+    setPresetImportSelection([])
+    setIsPresetImportDialogOpen(false)
     setIsNewItem(false)
     setIsItemDialogOpen(true)
   }
@@ -184,8 +270,9 @@ export function MenuManagementClient({
     setItemError(null)
     setItemImageFile(null)
     setItemImagePreview(item.image_url || null)
-    setModifierName('')
-    setModifierPriceDelta('')
+    setModifierDraftRows([createModifierDraftRow()])
+    setPresetImportSelection([])
+    setIsPresetImportDialogOpen(false)
     setIsNewItem(false)
     try {
       const itemModifiers = await getModifiersForMenuItem(item.id)
@@ -263,6 +350,16 @@ export function MenuManagementClient({
       return
     }
 
+    let createModifiersParsed: Array<{ name: string; price_modifier: number }> | null = null
+    if (!editingItemId) {
+      const modifierParse = parseModifierDraftRows(modifierDraftRows)
+      if (!modifierParse.ok) {
+        setItemError(modifierParse.error)
+        return
+      }
+      createModifiersParsed = modifierParse.modifiers
+    }
+
     setIsSavingItem(true)
     try {
       let imageUrl: string | null = null
@@ -303,13 +400,16 @@ export function MenuManagementClient({
           },
           restaurantSlug
         )
+        if (createModifiersParsed && createModifiersParsed.length > 0) {
+          await addMenuItemModifiersBatch(newItem.id, createModifiersParsed, restaurantSlug)
+        }
         setEditingItemId(newItem.id)
         setIsNewItem(true)
-        setModifiers([])
-        setModifierName('')
-        setModifierPriceDelta('')
         setItemError(null)
         await refreshMenuAfterChange()
+        const savedRows = await getModifiersForMenuItem(newItem.id)
+        setModifiers(savedRows)
+        setModifierDraftRows([createModifierDraftRow()])
       }
     } catch (error: any) {
       setItemError(error.message || 'Failed to save menu item')
@@ -334,35 +434,134 @@ export function MenuManagementClient({
     }
   }
 
-  const handleAddModifier = async () => {
-    if (!editingItemId) return
-    if (!modifierName.trim()) {
-      setItemError('Modifier name is required')
+  const openPresetImportDialog = () => {
+    setPresetImportSelection([])
+    setIsPresetImportDialogOpen(true)
+  }
+
+  const togglePresetImportSelection = (id: string) => {
+    setPresetImportSelection(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    )
+  }
+
+  const selectAllPresetImports = () => setPresetImportSelection(modifierPresets.map(p => p.id))
+  const clearPresetImportSelection = () => setPresetImportSelection([])
+
+  const handleConfirmPresetBatchImport = () => {
+    if (presetImportSelection.length === 0) return
+    const rows = presetImportSelection
+      .map(id => modifierPresets.find(p => p.id === id))
+      .filter((p): p is ModifierPreset => Boolean(p))
+      .map(draftRowFromPreset)
+    if (rows.length === 0) return
+    setModifierDraftRows(prev => [...prev, ...rows])
+    setPresetImportSelection([])
+    setIsPresetImportDialogOpen(false)
+    setItemError(null)
+  }
+
+  const handleOpenPresetDialog = (preset?: ModifierPreset) => {
+    setEditingPreset(preset ?? null)
+    setPresetFormName(preset?.name ?? '')
+    setPresetFormPrice(
+      preset != null && typeof preset.price_modifier === 'number'
+        ? String(preset.price_modifier)
+        : '0'
+    )
+    setPresetFormError(null)
+    setIsPresetDialogOpen(true)
+  }
+
+  const handleSavePreset = async () => {
+    if (!presetFormName.trim()) {
+      setPresetFormError('Name is required')
       return
     }
-    const delta = Number.parseFloat(modifierPriceDelta || '0')
-    if (Number.isNaN(delta)) {
-      setItemError('Price change must be a valid number')
+    const pv = Number.parseFloat(presetFormPrice.trim() === '' ? '0' : presetFormPrice)
+    if (Number.isNaN(pv)) {
+      setPresetFormError('Price adjustment must be a number (use 0 for no change)')
       return
     }
 
+    setPresetSaving(true)
+    setPresetFormError(null)
     try {
-      await addMenuItemModifier(
-        editingItemId,
-        {
-          name: modifierName.trim(),
-          price_modifier: delta,
-        },
-        restaurantSlug
+      if (editingPreset) {
+        const updated = await updateModifierPreset(
+          editingPreset.id,
+          { name: presetFormName.trim(), price_modifier: pv },
+          restaurantSlug
+        )
+        setModifierPresets(prev => prev.map(p => (p.id === updated.id ? updated : p)))
+      } else {
+        const created = await createModifierPreset(
+          restaurantId,
+          { name: presetFormName.trim(), price_modifier: pv },
+          restaurantSlug
+        )
+        setModifierPresets(prev => [...prev, created])
+      }
+      router.refresh()
+      setIsPresetDialogOpen(false)
+    } catch (error: unknown) {
+      setPresetFormError(error instanceof Error ? error.message : 'Failed to save default modifier')
+    } finally {
+      setPresetSaving(false)
+    }
+  }
+
+  const handleDeletePreset = async () => {
+    if (!deletePresetId) return
+    setPresetDeleteError(null)
+    try {
+      await deleteModifierPreset(deletePresetId, restaurantSlug)
+      setModifierPresets(prev => prev.filter(p => p.id !== deletePresetId))
+      setPresetImportSelection(prev => prev.filter(id => id !== deletePresetId))
+      router.refresh()
+      setIsPresetDeleteDialogOpen(false)
+      setDeletePresetId(null)
+      setDeletePresetName(null)
+    } catch (error: unknown) {
+      setPresetDeleteError(
+        error instanceof Error ? error.message : 'Failed to delete default modifier'
       )
-      setModifierName('')
-      setModifierPriceDelta('')
+    }
+  }
+
+  const openPresetDeleteDialog = (preset: ModifierPreset) => {
+    setDeletePresetId(preset.id)
+    setDeletePresetName(preset.name)
+    setPresetDeleteError(null)
+    setIsPresetDeleteDialogOpen(true)
+  }
+
+  const handleSaveModifierDrafts = async () => {
+    if (!editingItemId) return
+
+    const parsed = parseModifierDraftRows(modifierDraftRows)
+    if (!parsed.ok) {
+      setItemError(parsed.error)
+      return
+    }
+    if (parsed.modifiers.length === 0) {
+      setItemError('Add at least one modifier row with a label before saving.')
+      return
+    }
+    const toSave = parsed.modifiers
+
+    setIsSavingModifiers(true)
+    try {
+      await addMenuItemModifiersBatch(editingItemId, toSave, restaurantSlug)
       setItemError(null)
+      setModifierDraftRows([createModifierDraftRow()])
       await refreshMenuAfterChange()
       const rows = await getModifiersForMenuItem(editingItemId)
       setModifiers(rows)
-    } catch (error: any) {
-      setItemError(error.message || 'Failed to add modifier')
+    } catch (error: unknown) {
+      setItemError(error instanceof Error ? error.message : 'Failed to save modifiers')
+    } finally {
+      setIsSavingModifiers(false)
     }
   }
 
@@ -383,6 +582,9 @@ export function MenuManagementClient({
   const handlecloseItemDialog = (open: boolean) => {
     if (!open) {
       setIsNewItem(false)
+      setModifierDraftRows([])
+      setPresetImportSelection([])
+      setIsPresetImportDialogOpen(false)
     }
     setIsItemDialogOpen(open)
   }
@@ -444,6 +646,90 @@ export function MenuManagementClient({
           </Button>
         </div>
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle>Default modifiers</CardTitle>
+            <CardDescription>
+              Reuse these on menu items from the import dialog, or add custom rows per item.
+            </CardDescription>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => handleOpenPresetDialog()}
+          >
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Add preset
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <Accordion
+            type="single"
+            collapsible
+            defaultValue={initialModifierPresets.length > 0 ? 'modifier-presets' : undefined}
+            className="w-full"
+          >
+            <AccordionItem value="modifier-presets">
+              <AccordionTrigger className="text-base">
+                <div className="flex items-center gap-2">
+                  <span>Saved presets</span>
+                  <Badge variant="secondary">{modifierPresets.length}</Badge>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                {modifierPresets.length === 0 ? (
+                  <div className="py-6 text-center text-sm text-muted-foreground">
+                    No presets yet — e.g. drink choice, size.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {modifierPresets.map(p => (
+                      <div
+                        key={p.id}
+                        className="flex flex-col gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="flex gap-3 flex-1 min-w-0">
+                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-muted">
+                            <SlidersHorizontal className="h-5 w-5 text-muted-foreground/40" />
+                          </div>
+                          <div className="min-w-0 flex-1 space-y-0.5">
+                            <h3 className="truncate font-semibold">{p.name}</h3>
+                            <p className="text-sm font-bold tabular-nums">{formatCurrency(p.price_modifier)}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            aria-label={`Edit default modifier ${p.name}`}
+                            onClick={() => handleOpenPresetDialog(p)}
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            aria-label={`Delete default modifier ${p.name}`}
+                            onClick={() => openPresetDeleteDialog(p)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -677,11 +963,23 @@ export function MenuManagementClient({
           )}
 
           {isNewItem && (
-            <Alert>
-              <AlertDescription>
-                Item created! Add modifiers on the right (drinks, sides, portions, etc.) if needed, then click Done.
-              </AlertDescription>
-            </Alert>
+            <p className="text-muted-foreground m-0 rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs leading-normal">
+              <span className="font-medium text-foreground">Saved.</span>{' '}
+              <span className="text-muted-foreground/50" aria-hidden>
+                ·{' '}
+              </span>
+              modifiers <span className="font-medium text-foreground">Save modifiers</span>
+              <span className="text-muted-foreground/50" aria-hidden>
+                {' '}
+                ·{' '}
+              </span>
+              details <span className="font-medium text-foreground">Save Changes</span>
+              <span className="text-muted-foreground/50" aria-hidden>
+                {' '}
+                ·{' '}
+              </span>
+              exit <span className="font-medium text-foreground">Done</span>
+            </p>
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -769,81 +1067,146 @@ export function MenuManagementClient({
             </div>
 
             {/* Right column — Modifiers */}
-            <div className="space-y-4 sm:border-l sm:pl-6">
+            <div className="space-y-3 sm:border-l sm:pl-6">
               <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Modifiers</p>
-              <p className="text-xs text-muted-foreground -mt-2">
-                Optional choices with price changes — e.g. drink, size, add-on (use 0 if no price change).
-              </p>
 
-              {modifiers.length > 0 ? (
-                <div className="space-y-2">
-                  {modifiers.map((row: any) => (
-                    <div key={row.id} className="flex items-center justify-between p-2.5 border rounded-lg bg-muted/40">
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm">{row.name}</p>
-                        <p className="text-xs text-muted-foreground tabular-nums">
-                          +{formatCurrency(row.price_modifier)}
-                        </p>
+              {editingItemId ? (
+                <>
+                  <p className="text-xs font-medium text-muted-foreground">On this item</p>
+                  {modifiers.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">None yet.</p>
+                  ) : (
+                    <div className="overflow-hidden rounded-md border text-sm">
+                      <div className="grid grid-cols-[minmax(0,1fr)_6rem_2rem] gap-2 border-b bg-muted/40 px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <span>Label</span>
+                        <span className="text-right">Price</span>
+                        <span className="sr-only">Remove</span>
                       </div>
+                      {modifiers.map((row: any) => (
+                        <div
+                          key={row.id}
+                          className="grid grid-cols-[minmax(0,1fr)_6rem_2rem] items-center gap-2 border-b px-2 py-1.5 last:border-b-0"
+                        >
+                          <span className="truncate font-medium">{row.name}</span>
+                          <span className="text-right tabular-nums text-muted-foreground">
+                            {formatCurrency(row.price_modifier)}
+                          </span>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => handleDeleteModifier(row.id)}
+                            aria-label={`Remove modifier ${row.name}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Rows below save with <strong className="font-medium text-foreground">Create item</strong> · use{' '}
+                  <strong className="font-medium text-foreground">0</strong> for no price change.
+                </p>
+              )}
+
+              <p className="text-xs font-medium text-muted-foreground">Draft rows</p>
+              <div className="overflow-hidden rounded-md border">
+                <div className="grid grid-cols-1 gap-2 border-b bg-muted/40 px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:grid-cols-[minmax(0,1fr)_6.75rem_auto]">
+                  <span>Label</span>
+                  <span className="sm:text-right">Price (PHP)</span>
+                  <span className="hidden w-8 sm:inline" aria-hidden />
+                </div>
+                <div className="divide-y">
+                  {modifierDraftRows.map(row => (
+                    <div
+                      key={row.id}
+                      className="grid grid-cols-1 gap-2 px-2 py-1.5 sm:grid-cols-[minmax(0,1fr)_6.75rem_auto] sm:items-center"
+                    >
+                      <Input
+                        value={row.name}
+                        onChange={e =>
+                          setModifierDraftRows(prev =>
+                            prev.map(r =>
+                              r.id === row.id ? { ...r, name: e.target.value } : r
+                            )
+                          )
+                        }
+                        placeholder="e.g. Coke / Large"
+                        className="h-8 text-sm"
+                      />
+                      <Input
+                        type="number"
+                        value={row.priceDelta}
+                        onChange={e =>
+                          setModifierDraftRows(prev =>
+                            prev.map(r =>
+                              r.id === row.id ? { ...r, priceDelta: e.target.value } : r
+                            )
+                          )
+                        }
+                        placeholder="0"
+                        className="h-8 text-sm"
+                        step="0.01"
+                      />
                       <Button
-                        size="icon"
+                        type="button"
                         variant="ghost"
-                        className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
-                        onClick={() => handleDeleteModifier(row.id)}
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive sm:place-self-auto"
+                        aria-label="Remove row"
+                        onClick={() =>
+                          setModifierDraftRows(prev =>
+                            prev.length <= 1 ? prev : prev.filter(r => r.id !== row.id)
+                          )
+                        }
+                        disabled={modifierDraftRows.length <= 1}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
-                  No modifiers yet. Customers will pay the base price only.
-                </div>
-              )}
+              </div>
 
-              <Separator />
-
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Add modifier</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label htmlFor="modifier-name" className="text-xs">
-                      Label
-                    </Label>
-                    <Input
-                      id="modifier-name"
-                      value={modifierName}
-                      onChange={e => setModifierName(e.target.value)}
-                      placeholder="e.g. Large / Coke / Extra rice"
-                      className="mt-1 h-9 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="modifier-price" className="text-xs">
-                      +Price (PHP)
-                    </Label>
-                    <Input
-                      id="modifier-price"
-                      type="number"
-                      value={modifierPriceDelta}
-                      onChange={e => setModifierPriceDelta(e.target.value)}
-                      placeholder="0.00"
-                      className="mt-1 h-9 text-sm"
-                      step="0.01"
-                    />
-                  </div>
-                </div>
+              <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={handleAddModifier}
-                  className="w-full"
+                  className="h-9 text-xs sm:text-sm"
+                  onClick={openPresetImportDialog}
+                  disabled={modifierPresets.length === 0}
                 >
-                  <Plus className="w-3.5 h-3.5 mr-1.5" />
-                  Add modifier
+                  Import default modifiers…
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs sm:text-sm"
+                  onClick={() =>
+                    setModifierDraftRows(prev => [...prev, createModifierDraftRow()])
+                  }
+                >
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  Add row
+                </Button>
+                {editingItemId ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-9 text-xs sm:text-sm"
+                    onClick={handleSaveModifierDrafts}
+                    disabled={isSavingModifiers}
+                  >
+                    <Save className="mr-1.5 h-3.5 w-3.5" />
+                    {isSavingModifiers ? 'Saving…' : 'Save modifiers'}
+                  </Button>
+                ) : null}
               </div>
             </div>
           </div>
@@ -863,17 +1226,188 @@ export function MenuManagementClient({
             >
               {isNewItem ? 'Done' : 'Cancel'}
             </Button>
-            {!isNewItem && (
-              <Button onClick={handleCreateOrUpdateItem} className="flex-1" disabled={isUploadingImage || isSavingItem}>
-                {isUploadingImage
-                  ? 'Uploading...'
-                  : isSavingItem
-                    ? editingItemId ? 'Saving...' : 'Creating...'
-                    : editingItemId
-                      ? 'Save Changes'
-                      : 'Create Item'}
-              </Button>
+            <Button onClick={handleCreateOrUpdateItem} className="flex-1" disabled={isUploadingImage || isSavingItem}>
+              {isUploadingImage
+                ? 'Uploading...'
+                : isSavingItem
+                  ? editingItemId
+                    ? 'Saving...'
+                    : 'Creating...'
+                  : editingItemId
+                    ? 'Save Changes'
+                    : 'Create Item'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isPresetImportDialogOpen}
+        onOpenChange={open => {
+          setIsPresetImportDialogOpen(open)
+          if (!open) setPresetImportSelection([])
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Import default modifiers</DialogTitle>
+            <DialogDescription>
+              Select any number of presets. They will be appended as editable draft rows.
+            </DialogDescription>
+          </DialogHeader>
+          {modifierPresets.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No defaults defined yet. Add defaults in the accordion above first.
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={selectAllPresetImports}
+                >
+                  Select all
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={clearPresetImportSelection}
+                >
+                  Clear
+                </Button>
+              </div>
+              <div className="max-h-[min(280px,50dvh)] space-y-0.5 overflow-y-auto rounded-md border p-2">
+                {modifierPresets.map(p => (
+                  <label
+                    key={p.id}
+                    className="flex cursor-pointer items-center gap-3 rounded-md px-1 py-1.5 text-sm hover:bg-muted/50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={presetImportSelection.includes(p.id)}
+                      onChange={() => togglePresetImportSelection(p.id)}
+                      className="h-4 w-4 shrink-0 rounded border-input accent-primary"
+                    />
+                    <span className="min-w-0 flex-1 truncate font-medium">{p.name}</span>
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                      {formatCurrency(p.price_modifier)}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" className="flex-1" onClick={() => setIsPresetImportDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={handleConfirmPresetBatchImport}
+              disabled={presetImportSelection.length === 0 || modifierPresets.length === 0}
+            >
+              Import{presetImportSelection.length > 0 ? ` (${presetImportSelection.length})` : ''}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isPresetDialogOpen} onOpenChange={setIsPresetDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingPreset ? 'Edit default modifier' : 'New default modifier'}</DialogTitle>
+            <DialogDescription>
+              {editingPreset
+                ? 'Update the label and price adjustment for this preset.'
+                : 'Create a reusable option (e.g. drink choice, size). Add it to menu items from the modifiers section.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {presetFormError && (
+              <Alert variant="destructive">
+                <AlertDescription>{presetFormError}</AlertDescription>
+              </Alert>
             )}
+            <div>
+              <Label htmlFor="preset-name">Label</Label>
+              <Input
+                id="preset-name"
+                value={presetFormName}
+                onChange={e => setPresetFormName(e.target.value)}
+                placeholder="e.g. Large / Sprite"
+                className="mt-1"
+                maxLength={50}
+              />
+            </div>
+            <div>
+              <Label htmlFor="preset-price">Price adjustment (PHP)</Label>
+              <Input
+                id="preset-price"
+                type="number"
+                value={presetFormPrice}
+                onChange={e => setPresetFormPrice(e.target.value)}
+                placeholder="0"
+                className="mt-1"
+                step="0.01"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">Use 0 when this option does not change the item price.</p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setIsPresetDialogOpen(false)} className="flex-1">
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSavePreset}
+                className="flex-1"
+                disabled={presetSaving || !presetFormName.trim()}
+              >
+                {presetSaving ? 'Saving…' : editingPreset ? 'Save' : 'Create'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isPresetDeleteDialogOpen}
+        onOpenChange={open => {
+          setIsPresetDeleteDialogOpen(open)
+          if (!open) {
+            setPresetDeleteError(null)
+            setDeletePresetId(null)
+            setDeletePresetName(null)
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete default modifier</DialogTitle>
+            <DialogDescription>
+              Remove &ldquo;{deletePresetName ?? 'this preset'}&rdquo;? Menu items that already have this text saved are
+              not changed.
+            </DialogDescription>
+          </DialogHeader>
+          {presetDeleteError && (
+            <Alert variant="destructive">
+              <AlertDescription>{presetDeleteError}</AlertDescription>
+            </Alert>
+          )}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsPresetDeleteDialogOpen(false)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeletePreset} className="flex-1">
+              Delete
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
