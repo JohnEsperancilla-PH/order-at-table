@@ -29,7 +29,7 @@ export default async function TableWelcomePage({
       {/* Hero */}
       <div className="relative overflow-hidden">
         <div
-          className="h-[clamp(70px,15dvh,130px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+          className="h-[clamp(140px,30dvh,260px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
           style={restaurant?.cover_image_url ? {
             backgroundImage: `url(${restaurant.cover_image_url})`,
             backgroundSize: 'cover',

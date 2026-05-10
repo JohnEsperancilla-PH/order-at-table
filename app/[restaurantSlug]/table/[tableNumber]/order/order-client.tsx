@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { ShoppingCart, Minus, CheckCircle2, X, RefreshCw, Plus, ShoppingBag, Trash2 } from 'lucide-react'
 import { createOrder, getOrderById, getActiveOrderForSession } from '@/lib/actions/orders'
 import { CartItem, MenuItem, MenuCategory, Order } from '@/lib/types'
@@ -431,9 +430,9 @@ export function OrderPageClient({
           <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
             <SheetContent
               side="bottom"
-              className="!h-auto max-h-[85vh] max-w-md rounded-t-2xl pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] md:bottom-[calc(50%-420px+0.75rem)] md:left-1/2 md:w-[calc(28rem-1.5rem)] md:max-w-[calc(28rem-1.5rem)] md:-translate-x-1/2 md:rounded-2xl md:border md:shadow-2xl"
+              className="flex max-h-[min(92dvh,calc(100dvh-env(safe-area-inset-bottom,0px)))] min-h-0 flex-col gap-0 overflow-hidden rounded-t-2xl p-0 pb-0 pt-2 max-w-md md:bottom-[calc(50%-420px+0.75rem)] md:left-1/2 md:max-h-[min(560px,calc(100dvh-3rem))] md:w-[calc(28rem-1.5rem)] md:max-w-[calc(28rem-1.5rem)] md:-translate-x-1/2 md:rounded-2xl md:border md:p-0 md:shadow-2xl md:pt-2"
             >
-              <SheetHeader className="gap-1.5 pr-12 pb-3">
+              <SheetHeader className="shrink-0 gap-1.5 border-b border-border/50 px-4 pb-3 pr-14 pt-2 text-left md:px-5">
                 <SheetTitle className="flex items-center gap-2 text-lg font-bold tracking-tight">
                   <span>Your Cart</span>
                   <Badge variant="secondary" className="h-6 min-w-6 px-1.5 text-xs font-semibold tabular-nums">
@@ -444,15 +443,16 @@ export function OrderPageClient({
                   Review your items before placing the order.
                 </SheetDescription>
               </SheetHeader>
-              <div className="guest-overscroll-contain flex flex-col px-4 pb-4 sm:px-5">
-                {cart.length === 0 ? (
-                  <div className="space-y-3 py-10 text-center">
-                    <ShoppingBag className="mx-auto h-12 w-12 text-muted-foreground/40" />
-                    <p className="text-sm text-muted-foreground">Your cart is empty</p>
-                  </div>
-                ) : (
-                  <ScrollArea className="guest-overscroll-contain max-h-[45vh]">
-                    <div className="space-y-2 pb-2">
+
+              {cart.length === 0 ? (
+                <div className="flex flex-1 flex-col items-center justify-center px-4 py-12 sm:px-5">
+                  <ShoppingBag className="h-12 w-12 text-muted-foreground/40" />
+                  <p className="mt-3 text-sm text-muted-foreground">Your cart is empty</p>
+                </div>
+              ) : (
+                <>
+                  <div className="guest-overscroll-contain min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-4 py-3 sm:px-5">
+                    <div className="space-y-2">
                       {cart.map(item => {
                         const itemPrice = lineUnitPrice(item)
                         const lineTotal = itemPrice * item.quantity
@@ -523,19 +523,14 @@ export function OrderPageClient({
                         )
                       })}
                     </div>
-                  </ScrollArea>
-                )}
-
-                {addedMessage != null && isCartOpen ? (
-                  <div className="shrink-0 pt-2">
-                    <CartToastBubble message={addedMessage} />
                   </div>
-                ) : null}
 
-                {cart.length > 0 ? (
-                  <div className="mt-2 space-y-4">
-                    <Separator />
-                    <div className="space-y-1.5 pt-1">
+                  <div className="shrink-0 space-y-3 border-t border-border/60 bg-background px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-3 sm:px-5">
+                    {addedMessage != null && isCartOpen ? (
+                      <CartToastBubble message={addedMessage} />
+                    ) : null}
+                    <Separator className="bg-border/70" />
+                    <div className="space-y-1.5">
                       <div className="flex justify-between text-sm text-foreground/80">
                         <span>
                           {cartItemCount} {cartItemCount === 1 ? 'item' : 'items'}
@@ -556,8 +551,8 @@ export function OrderPageClient({
                       Confirm Order &middot; {formatCurrency(subtotal)}
                     </Button>
                   </div>
-                ) : null}
-              </div>
+                </>
+              )}
             </SheetContent>
           </Sheet>
 

@@ -45,6 +45,16 @@ export default function PublicBetaPage() {
             Each version below summarizes what ships today and expands into the full changelog. Layout mirrors the bordered
             menu rows used in cashier screens so teams can skim details quickly.
           </p>
+          <p className="mx-auto mt-6 max-w-xl text-center text-[13px] leading-relaxed text-muted-foreground">
+            Found errors on the app? Report to{' '}
+            <a
+              href="mailto:johnleonardesperancilla@gmail.com"
+              className="font-medium text-foreground underline underline-offset-2 decoration-muted-foreground/50 hover:decoration-foreground"
+            >
+              johnleonardesperancilla@gmail.com
+            </a>
+            .
+          </p>
         </div>
 
         <Accordion type="multiple" defaultValue={['pb-1-0']} className="w-full">
