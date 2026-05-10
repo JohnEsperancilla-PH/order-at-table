@@ -15,6 +15,7 @@ import { ShoppingCart, Minus, CheckCircle2, X, RefreshCw, Plus, ShoppingBag, Tra
 import { createOrder, getOrderById, getActiveOrderForSession } from '@/lib/actions/orders'
 import { CartItem, MenuItem, MenuCategory, Order } from '@/lib/types'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { formatCurrency } from '@/lib/utils'
@@ -322,8 +323,17 @@ export function OrderPageClient({
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:flex md:items-center md:justify-center md:px-6 md:py-8 md:pb-8">
       <div className="mx-auto max-w-md space-y-5 p-4 sm:p-5 md:h-[840px] md:w-[28rem] md:max-h-[calc(100dvh-4rem)] md:overflow-hidden md:rounded-[28px] md:border md:bg-background md:shadow-2xl md:flex md:flex-col">
-        {/* Hero with restaurant info overlay - mobile-optimized aspect ratio */}
-        <div className="relative overflow-hidden rounded-2xl ring-1 ring-black/5 dark:ring-white/10">
+        <div className="space-y-1">
+          <div className="flex w-full shrink-0 items-center justify-center px-1 py-0.5 leading-tight">
+            <Link
+              href="/public-beta"
+              className="text-center text-[11px] font-medium leading-snug text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 transition-colors hover:text-foreground hover:decoration-foreground/60"
+            >
+              Learn More about QRder - Public Beta 1.0
+            </Link>
+          </div>
+          {/* Hero with restaurant info overlay - mobile-optimized aspect ratio */}
+          <div className="relative overflow-hidden rounded-2xl ring-1 ring-black/5 dark:ring-white/10">
           <div
               className="h-[clamp(70px,15dvh,130px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
             style={table.restaurants?.cover_image_url ? {
@@ -341,6 +351,7 @@ export function OrderPageClient({
               Table {table.table_number}
             </p>
           </div>
+        </div>
         </div>
 
         {customerName && (
