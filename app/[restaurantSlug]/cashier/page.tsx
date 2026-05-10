@@ -1,6 +1,6 @@
 import { getAllOrdersByRestaurantSlug, getMenuItemsByRestaurantSlug } from '@/lib/actions/orders'
 import { getTablesByRestaurantSlug } from '@/lib/actions/tables'
-import { getSizesForMenuItems } from '@/lib/actions/sizes'
+import { getModifiersForMenuItems } from '@/lib/actions/modifiers'
 import { getRestaurantBySlug } from '@/lib/actions/restaurants'
 import { AdminDashboardClient } from './admin-client'
 import { notFound } from 'next/navigation'
@@ -24,21 +24,19 @@ export default async function CashierPage({
     getMenuItemsByRestaurantSlug(restaurantSlug, true),
   ])
 
-  // Load sizes for all menu items
   const menuItemIds = menuItems.map((item: any) => item.id)
-  const sizesByMenuItem = await getSizesForMenuItems(menuItemIds)
+  const modifiersByMenuItem = await getModifiersForMenuItems(menuItemIds)
 
-  // Attach sizes to menu items
-  const menuItemsWithSizes = menuItems.map((item: any) => ({
+  const menuItemsWithModifiers = menuItems.map((item: any) => ({
     ...item,
-    sizes: sizesByMenuItem[item.id] || [],
+    modifiers: modifiersByMenuItem[item.id] || [],
   }))
 
   return (
     <AdminDashboardClient 
       initialOrders={orders} 
       tables={tables} 
-      menuItems={menuItemsWithSizes}
+      menuItems={menuItemsWithModifiers}
       restaurantSlug={restaurantSlug}
     />
   )

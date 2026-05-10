@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import { getRestaurantBySlug } from './restaurants'
 
@@ -15,7 +15,7 @@ async function writeAuditLog(params: {
   actorId?: string
   metadata?: Record<string, unknown>
 }) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   await supabase.from('audit_logs').insert({
     restaurant_id: params.restaurantId,
     action: params.action,
@@ -28,7 +28,7 @@ async function writeAuditLog(params: {
 }
 
 export async function getTable(tableId: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   
   const { data, error } = await supabase
     .from('tables')
@@ -45,7 +45,7 @@ export async function getTable(tableId: string) {
 }
 
 export async function getTableByNumber(tableNumber: string, restaurantId?: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   
   let query = supabase
     .from('tables')
@@ -74,25 +74,37 @@ export async function getTableByRestaurantSlugAndNumber(restaurantSlug: string, 
     throw new Error('Restaurant not found')
   }
 
-  const supabase = await createClient()
+  const normalizedNumber = String(tableNumber).trim()
+  if (!normalizedNumber) {
+    throw new Error('Invalid table number')
+  }
+
+  const supabase = createServiceClient()
   
+  // maybeSingle: 0 rows → null (avoid PostgREST ".single()" JSON coerce error); 2+ rows → error
   const { data, error } = await supabase
     .from('tables')
     .select('*, restaurants(*)')
     .eq('restaurant_id', restaurant.id)
-    .eq('table_number', tableNumber)
+    .eq('table_number', normalizedNumber)
     .eq('is_active', true)
-    .single()
+    .limit(1)
+    .maybeSingle()
 
-  if (error || !data) {
-    throw new Error(`Table not found for restaurant: ${error?.message || 'No active table found'}`)
+  if (error) {
+    throw new Error(`Table not found for restaurant: ${error.message}`)
+  }
+  if (!data) {
+    throw new Error(
+      `No active table "${normalizedNumber}" for this venue. Open Cashier → Tables and add table ${normalizedNumber}, or use a table number that exists.`
+    )
   }
 
   return data
 }
 
 export async function getMenuItems(restaurantId: string, includeUnavailable = false) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   
   let query = supabase
     .from('menu_items')
@@ -114,7 +126,7 @@ export async function getMenuItems(restaurantId: string, includeUnavailable = fa
 }
 
 export async function getMenuCategories(restaurantId: string, includeInactive = false) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   let query = supabase
     .from('menu_categories')
@@ -143,7 +155,7 @@ export async function getMenuItemsByRestaurantSlug(restaurantSlug: string, inclu
     return []
   }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   
   let query = supabase
     .from('menu_items')
@@ -171,7 +183,7 @@ export async function getMenuCategoriesByRestaurantSlug(restaurantSlug: string, 
     return []
   }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   let query = supabase
     .from('menu_categories')
@@ -193,7 +205,7 @@ export async function getMenuCategoriesByRestaurantSlug(restaurantSlug: string, 
 }
 
 export async function getActiveOrder(tableId: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data, error } = await supabase
     .from('orders')
@@ -201,7 +213,8 @@ export async function getActiveOrder(tableId: string) {
       *,
       order_items (
         *,
-        menu_items (*)
+        menu_items (*),
+        menu_item_modifiers ( id, name )
       )
     `)
     .eq('table_id', tableId)
@@ -220,7 +233,7 @@ export async function getActiveOrder(tableId: string) {
 // Fetch active order for a specific customer session on a table
 export async function getActiveOrderForSession(tableId: string, customerSessionId: string) {
   if (!customerSessionId) return null
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data, error } = await supabase
     .from('orders')
@@ -228,7 +241,8 @@ export async function getActiveOrderForSession(tableId: string, customerSessionI
       *,
       order_items (
         *,
-        menu_items (*)
+        menu_items (*),
+        menu_item_modifiers ( id, name )
       )
     `)
     .eq('table_id', tableId)
@@ -246,7 +260,7 @@ export async function getActiveOrderForSession(tableId: string, customerSessionI
 }
 
 export async function getOrderById(orderId: string, tableNumber?: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   // Use left join instead of inner join to prevent failures if relationships are missing
   // Then validate the relationships afterward
@@ -257,7 +271,8 @@ export async function getOrderById(orderId: string, tableNumber?: string) {
       tables (*, restaurants (*)),
       order_items (
         *,
-        menu_items (*)
+        menu_items (*),
+        menu_item_modifiers ( id, name )
       )
     `)
     .eq('id', orderId)
@@ -292,13 +307,19 @@ export async function getOrderById(orderId: string, tableNumber?: string) {
 export async function createOrder(
   tableId: string,
   restaurantId: string,
-  items: Array<{ menu_item_id: string; quantity: number; price: number }>,
+  items: Array<{
+    menu_item_id: string
+    quantity: number
+    price: number
+    modifier_id?: string | null
+    special_instructions?: string | null
+  }>,
   discountCode?: string,
   customerSessionId?: string,
   customerName?: string,
   idempotencyKey?: string
 ) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   // Return the existing order for retry-safe submissions.
   if (idempotencyKey) {
@@ -309,7 +330,8 @@ export async function createOrder(
         tables (*),
         order_items (
           *,
-          menu_items (*)
+          menu_items (*),
+          menu_item_modifiers ( id, name )
         )
       `)
       .eq('restaurant_id', restaurantId)
@@ -491,6 +513,8 @@ export async function createOrder(
     menu_item_id: item.menu_item_id,
     quantity: item.quantity,
     price: item.price,
+    modifier_id: item.modifier_id ?? null,
+    special_instructions: item.special_instructions?.trim() || null,
   }))
 
   const { error: orderItemsError } = await supabase
@@ -534,7 +558,7 @@ export async function createOrder(
 }
 
 export async function verifyOrderByCode(confirmationCode: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   
   const { data, error } = await supabase
     .from('orders')
@@ -544,7 +568,8 @@ export async function verifyOrderByCode(confirmationCode: string) {
       restaurants (*),
       order_items (
         *,
-        menu_items (*)
+        menu_items (*),
+        menu_item_modifiers ( id, name )
       )
     `)
     .eq('confirmation_code', confirmationCode.toUpperCase())
@@ -568,7 +593,7 @@ export async function updateOrderStatus(
     changeAmount?: number
   }
 ) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   // Verify restaurant exists and get its ID
   const restaurant = await getRestaurantBySlug(restaurantSlug)
@@ -649,7 +674,7 @@ export async function bulkUpdateOrderStatus(
     return { updatedCount: 0 }
   }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   const restaurant = await getRestaurantBySlug(restaurantSlug)
 
   if (!restaurant) {
@@ -703,7 +728,7 @@ export async function bulkUpdateOrderStatus(
 }
 
 export async function resendReceipt(restaurantSlug: string, orderId: string, actorId?: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   const restaurant = await getRestaurantBySlug(restaurantSlug)
 
   if (!restaurant) {
@@ -748,7 +773,7 @@ export async function resendReceipt(restaurantSlug: string, orderId: string, act
 }
 
 export async function getShiftHandoverSummary(restaurantSlug: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   const restaurant = await getRestaurantBySlug(restaurantSlug)
 
   if (!restaurant) {
@@ -788,7 +813,7 @@ export async function getShiftHandoverSummary(restaurantSlug: string) {
 }
 
 export async function getAllOrders(restaurantId?: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   
   let query = supabase
     .from('orders')
@@ -798,7 +823,8 @@ export async function getAllOrders(restaurantId?: string) {
       restaurants (*),
       order_items (
         *,
-        menu_items (*)
+        menu_items (*),
+        menu_item_modifiers ( id, name )
       )
     `)
     .order('created_at', { ascending: false })
@@ -820,7 +846,7 @@ export async function getOrdersByStatus(
   status: string,
   restaurantId?: string
 ) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   
   let query = supabase
     .from('orders')
@@ -830,7 +856,8 @@ export async function getOrdersByStatus(
       restaurants (*),
       order_items (
         *,
-        menu_items (*)
+        menu_items (*),
+        menu_item_modifiers ( id, name )
       )
     `)
     .eq('status', status)
@@ -857,7 +884,7 @@ export async function getAllOrdersByRestaurantSlug(restaurantSlug: string) {
     return []
   }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   
   const { data, error } = await supabase
     .from('orders')
@@ -866,7 +893,8 @@ export async function getAllOrdersByRestaurantSlug(restaurantSlug: string) {
       tables (*),
       order_items (
         *,
-        menu_items (*)
+        menu_items (*),
+        menu_item_modifiers ( id, name )
       )
     `)
     .eq('restaurant_id', restaurant.id)
@@ -889,7 +917,7 @@ export async function getOrdersByStatusAndRestaurantSlug(
     return []
   }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   
   const { data, error } = await supabase
     .from('orders')
@@ -898,7 +926,8 @@ export async function getOrdersByStatusAndRestaurantSlug(
       tables (*),
       order_items (
         *,
-        menu_items (*)
+        menu_items (*),
+        menu_item_modifiers ( id, name )
       )
     `)
     .eq('status', status)

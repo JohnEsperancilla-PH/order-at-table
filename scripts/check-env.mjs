@@ -30,10 +30,10 @@ loadEnvFile(path.join(cwd, '.env'))
 const required = [
   'NEXT_PUBLIC_SUPABASE_URL',
   'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY',
 ]
 
 const recommended = [
-  'SUPABASE_SERVICE_ROLE_KEY',
   'CRON_SECRET',
   'SMTP_HOST',
   'SMTP_PORT',

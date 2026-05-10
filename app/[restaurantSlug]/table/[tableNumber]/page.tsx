@@ -11,18 +11,14 @@ export default async function TableWelcomePage({
 }: {
   params: Promise<{ restaurantSlug: string; tableNumber: string }>
 }) {
-  try {
-    const { restaurantSlug, tableNumber } = await params
+  const { restaurantSlug, tableNumber } = await params
 
+  try {
     if (!restaurantSlug || !tableNumber) {
       return <div className="p-6 text-center">Invalid restaurant or table number</div>;
     }
 
     const table = await getTableByRestaurantSlugAndNumber(restaurantSlug, tableNumber)
-    
-    if (!table) {
-      return <div className="p-6 text-center">Table not found</div>;
-    }
 
     const restaurant = table.restaurants
     const isOpen = restaurant?.is_open ?? true
@@ -122,6 +118,15 @@ export default async function TableWelcomePage({
   )
   } catch (error) {
     console.error('Error in TableWelcomePage:', error)
-    return <div className="p-6 text-center text-destructive">Error loading page. Please try again.</div>;
+    const message =
+      error instanceof Error ? error.message : 'Something went wrong. Please try again.'
+    return (
+      <div className="mx-auto max-w-md space-y-2 p-6 text-center">
+        <p className="text-muted-foreground text-sm">{message}</p>
+        <Button asChild variant="outline">
+          <Link href={`/${restaurantSlug}/table/${tableNumber}`}>Try again</Link>
+        </Button>
+      </div>
+    )
   }
 }

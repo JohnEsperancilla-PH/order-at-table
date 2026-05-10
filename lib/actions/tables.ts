@@ -1,11 +1,11 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import { getRestaurantBySlug } from './restaurants'
 
 export async function getTableByNumber(tableNumber: string, restaurantId?: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   
   let query = supabase
     .from('tables')
@@ -27,7 +27,7 @@ export async function getTableByNumber(tableNumber: string, restaurantId?: strin
 }
 
 export async function getAllTables(restaurantId?: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   
   let query = supabase
     .from('tables')
@@ -52,7 +52,7 @@ export async function getFirstTableNumbersByRestaurantIds(
 ): Promise<Record<string, string>> {
   if (restaurantIds.length === 0) return {}
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   const { data, error } = await supabase
     .from('tables')
     .select('restaurant_id, table_number')
@@ -78,7 +78,7 @@ export async function getTablesByRestaurantSlug(restaurantSlug: string) {
     return []
   }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   
   const { data, error } = await supabase
     .from('tables')
@@ -98,7 +98,7 @@ export async function createTable(
   tableNumber: string,
   capacity?: number
 ) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   // Check if table number already exists
   const { data: existing } = await supabase
@@ -139,7 +139,7 @@ export async function updateTable(
     is_active?: boolean
   }
 ) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   // If updating table_number, check for duplicates
   if (updates.table_number) {
@@ -180,7 +180,7 @@ export async function updateTable(
 }
 
 export async function deleteTable(tableId: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   // Check if table has active orders
   const { data: activeOrders } = await supabase

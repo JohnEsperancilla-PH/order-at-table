@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { NextResponse } from 'next/server'
 import { getClientIp, isRateLimited } from '@/lib/security/request-guard'
 
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const supabase = await createClient()
+    const supabase = createServiceClient()
 
     let query = supabase
       .from('orders')
@@ -67,7 +67,8 @@ export async function POST(request: Request) {
         restaurants (*),
         order_items (
           *,
-          menu_items (*)
+          menu_items (*),
+          menu_item_modifiers ( id, name )
         )
       `)
       .eq('confirmation_code', normalizedCode)

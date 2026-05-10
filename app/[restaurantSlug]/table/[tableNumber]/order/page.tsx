@@ -1,6 +1,6 @@
 import { getTableByRestaurantSlugAndNumber } from '@/lib/actions/orders'
 import { getMenuCategories, getMenuItems } from '@/lib/actions/orders'
-import { getSizesForMenuItems } from '@/lib/actions/sizes'
+import { getModifiersForMenuItems } from '@/lib/actions/modifiers'
 import { OrderPageClient } from './order-client'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -118,21 +118,19 @@ export default async function OrderPage({
       getMenuItems(table.restaurant_id, true),
     ])
 
-    // Load sizes for all menu items
     const menuItemIds = menuItems.map((item: any) => item.id)
-    const sizesByMenuItem = await getSizesForMenuItems(menuItemIds)
+    const modifiersByMenuItem = await getModifiersForMenuItems(menuItemIds)
 
-    // Attach sizes to menu items
-    const menuItemsWithSizes = menuItems.map((item: any) => ({
+    const menuItemsWithModifiers = menuItems.map((item: any) => ({
       ...item,
-      sizes: sizesByMenuItem[item.id] || [],
+      modifiers: modifiersByMenuItem[item.id] || [],
     }))
 
     return (
       <OrderPageClient
         table={table}
         categories={categories}
-        menuItems={menuItemsWithSizes}
+        menuItems={menuItemsWithModifiers}
         restaurantSlug={restaurantSlug}
       />
     )

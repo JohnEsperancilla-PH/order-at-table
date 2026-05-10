@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import { hash, compare } from 'bcryptjs'
 
@@ -11,7 +11,7 @@ export async function createStaffAccount(
   name: string,
   role: 'owner' | 'manager' | 'staff' = 'staff'
 ) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   // Check if email already exists for this restaurant
   const { data: existing } = await supabase
@@ -56,7 +56,7 @@ export async function createStaffAccount(
 }
 
 export async function loginStaffAccount(restaurantSlug: string, email: string, password: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   // Run both queries in parallel instead of sequentially
   const [restaurantResult, accountBySlugResult] = await Promise.all([
@@ -106,7 +106,7 @@ export async function loginStaffAccount(restaurantSlug: string, email: string, p
 }
 
 export async function getAllStaffAccountsForPlatformAdmin() {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data, error } = await supabase
     .from('staff_accounts')
@@ -137,7 +137,7 @@ export async function getAllStaffAccountsForPlatformAdmin() {
 }
 
 export async function getStaffAccountsByRestaurant(restaurantId: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data, error } = await supabase
     .from('staff_accounts')
@@ -153,7 +153,7 @@ export async function getStaffAccountsByRestaurant(restaurantId: string) {
 }
 
 export async function deleteStaffAccount(accountId: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { error } = await supabase
     .from('staff_accounts')
@@ -178,7 +178,7 @@ export async function updateStaffAccount(
     is_active?: boolean
   }
 ) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data, error } = await supabase
     .from('staff_accounts')

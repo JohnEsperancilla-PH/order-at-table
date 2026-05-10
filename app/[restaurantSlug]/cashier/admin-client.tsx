@@ -863,17 +863,27 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                   {(selectedOrder as CashierOrder).order_items?.map((item: any) => (
                     <div
                       key={item.id}
-                      className="flex justify-between items-center px-3 py-2.5"
+                      className="flex justify-between items-start gap-2 px-3 py-2.5"
                     >
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm">
                           {item.menu_items?.name || 'Unknown Item'}
                         </p>
+                        {item.menu_item_modifiers?.name && (
+                          <p className="text-[11px] text-primary font-medium mt-0.5">
+                            {item.menu_item_modifiers.name}
+                          </p>
+                        )}
                         <p className="text-xs text-muted-foreground">
                           {item.quantity} &times; {formatCurrency(item.price)}
                         </p>
+                        {item.special_instructions?.trim() && (
+                          <p className="text-xs text-amber-800 dark:text-amber-300 mt-1.5 leading-snug whitespace-pre-wrap">
+                            {item.special_instructions.trim()}
+                          </p>
+                        )}
                       </div>
-                      <p className="font-semibold text-sm tabular-nums ml-3">
+                      <p className="font-semibold text-sm tabular-nums shrink-0">
                         {formatCurrency(item.quantity * item.price)}
                       </p>
                     </div>

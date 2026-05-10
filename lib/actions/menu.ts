@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 
 export async function toggleMenuItemAvailability(
@@ -8,7 +8,7 @@ export async function toggleMenuItemAvailability(
   isAvailable: boolean,
   restaurantSlug?: string
 ) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data, error } = await supabase
     .from('menu_items')
@@ -48,7 +48,7 @@ export async function createMenuItem(
   },
   restaurantSlug?: string
 ) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data: lastItem } = await supabase
     .from('menu_items')
@@ -98,7 +98,7 @@ export async function updateMenuItem(
   },
   restaurantSlug?: string
 ) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data, error } = await supabase
     .from('menu_items')
@@ -119,7 +119,7 @@ export async function updateMenuItem(
 }
 
 export async function deleteMenuItem(menuItemId: string, restaurantSlug?: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { error } = await supabase
     .from('menu_items')
@@ -142,7 +142,7 @@ export async function createMenuCategory(
   description?: string | null,
   restaurantSlug?: string
 ) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data: lastCategory } = await supabase
     .from('menu_categories')
@@ -182,7 +182,7 @@ export async function updateMenuCategory(
   updates: { name?: string; description?: string | null; is_active?: boolean },
   restaurantSlug?: string
 ) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data, error } = await supabase
     .from('menu_categories')
@@ -211,7 +211,7 @@ export async function toggleMenuCategoryActive(
 }
 
 export async function deleteMenuCategory(categoryId: string, restaurantSlug?: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data: existingItems } = await supabase
     .from('menu_items')

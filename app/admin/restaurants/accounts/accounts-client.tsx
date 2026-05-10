@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useSyncedInitial } from '@/hooks/use-synced-initial'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -83,9 +85,9 @@ export function AccountsClient({
   initialAccounts,
   preselectedRestaurantId = null,
 }: AccountsClientProps) {
-
-  const [accounts, setAccounts] = useState<Account[]>(initialAccounts)
-  const [restaurants] = useState(initialRestaurants)
+  const router = useRouter()
+  const [accounts, setAccounts] = useSyncedInitial<Account[]>(initialAccounts)
+  const [restaurants] = useSyncedInitial<Restaurant[]>(initialRestaurants)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -179,6 +181,7 @@ export function AccountsClient({
         ...prev,
       ])
 
+      router.refresh()
       setSuccess('Account created successfully')
       setFormData({
         restaurantId: formData.restaurantId,
@@ -203,6 +206,7 @@ export function AccountsClient({
     try {
       await deleteStaffAccount(deleteTarget.id)
       setAccounts((prev) => prev.filter((a) => a.id !== deleteTarget.id))
+      router.refresh()
       setDeleteTarget(null)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to delete account')
@@ -219,6 +223,7 @@ export function AccountsClient({
       setAccounts((prev) =>
         prev.map((a) => (a.id === account.id ? { ...a, ...updated } : a))
       )
+      router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to update account')
     }

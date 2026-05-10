@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, type ChangeEvent } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -26,11 +27,15 @@ import {
   updateMenuItem,
   deleteMenuItem,
 } from '@/lib/actions/menu'
-import { addSize, deleteSize, getSizesForMenuItem } from '@/lib/actions/sizes'
+import {
+  addMenuItemModifier,
+  deleteMenuItemModifier,
+  getModifiersForMenuItem,
+} from '@/lib/actions/modifiers'
 import { getMenuCategoriesByRestaurantSlug, getMenuItemsByRestaurantSlug } from '@/lib/actions/orders'
 import { MenuCategory } from '@/lib/types'
 import { CheckCircle2, XCircle, RefreshCw, Plus, Edit, Trash2, UtensilsCrossed, Image as ImageIcon } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { uploadMenuItemImage } from '@/lib/actions/storage'
 
 interface MenuManagementClientProps {
   categories: MenuCategory[]
@@ -45,6 +50,7 @@ export function MenuManagementClient({
   restaurantSlug,
   restaurantId,
 }: MenuManagementClientProps) {
+  const router = useRouter()
   const [updatingItems, setUpdatingItems] = useState<Set<string>>(new Set())
   const [menuItems, setMenuItems] = useState(initialMenuItems)
   const [categoryList, setCategoryList] = useState(categories)
@@ -65,12 +71,11 @@ export function MenuManagementClient({
   const [deleteItemId, setDeleteItemId] = useState<string | null>(null)
   const [deleteItemName, setDeleteItemName] = useState<string | null>(null)
   const [toggleError, setToggleError] = useState<string | null>(null)
-  const [sizes, setSizes] = useState<any[]>([])
-  const [sizeName, setSizeName] = useState('')
-  const [sizePriceModifier, setSizePriceModifier] = useState('')
+  const [modifiers, setModifiers] = useState<any[]>([])
+  const [modifierName, setModifierName] = useState('')
+  const [modifierPriceDelta, setModifierPriceDelta] = useState('')
   const [isNewItem, setIsNewItem] = useState(false)
   const [isSavingItem, setIsSavingItem] = useState(false)
-  const supabase = createClient()
 
   const loadMenuData = async () => {
     try {
@@ -80,25 +85,30 @@ export function MenuManagementClient({
         getMenuCategoriesByRestaurantSlug(restaurantSlug, true),
       ])
       
-      // Load sizes for each item
-      const itemsWithSizes = await Promise.all(
+      const itemsWithModifiers = await Promise.all(
         items.map(async (item: any) => {
           try {
-            const itemSizes = await getSizesForMenuItem(item.id)
-            return { ...item, sizes: itemSizes }
-          } catch (error) {
-            return { ...item, sizes: [] }
+            const itemModifiers = await getModifiersForMenuItem(item.id)
+            return { ...item, modifiers: itemModifiers }
+          } catch {
+            return { ...item, modifiers: [] }
           }
         })
       )
-      
-      setMenuItems(itemsWithSizes)
+
+      setMenuItems(itemsWithModifiers)
       setCategoryList(categoriesData)
     } catch (error) {
       console.error('Failed to refresh menu items:', error)
     } finally {
       setIsRefreshing(false)
     }
+  }
+
+  /** Reload menu client state and refresh Server Components (layout/nav). */
+  const refreshMenuAfterChange = async () => {
+    await loadMenuData()
+    router.refresh()
   }
 
   useEffect(() => {
@@ -110,6 +120,10 @@ export function MenuManagementClient({
 
     return () => clearInterval(interval)
   }, [autoRefresh])
+
+  useEffect(() => {
+    setCategoryList(categories)
+  }, [categories])
 
   const itemsByCategory = categoryList.reduce<Record<string, any[]>>((acc, category) => {
     acc[category.id] = []
@@ -131,7 +145,7 @@ export function MenuManagementClient({
     setUpdatingItems(prev => new Set(prev).add(itemId))
     try {
       await toggleMenuItemAvailability(itemId, !currentStatus, restaurantSlug)
-      await loadMenuData()
+      await refreshMenuAfterChange()
     } catch (error: unknown) {
       setToggleError(error instanceof Error ? error.message : 'Failed to update item availability')
     } finally {
@@ -153,9 +167,9 @@ export function MenuManagementClient({
     setItemError(null)
     setItemImageFile(null)
     setItemImagePreview(null)
-    setSizes([])
-    setSizeName('')
-    setSizePriceModifier('')
+    setModifiers([])
+    setModifierName('')
+    setModifierPriceDelta('')
     setIsNewItem(false)
     setIsItemDialogOpen(true)
   }
@@ -170,15 +184,15 @@ export function MenuManagementClient({
     setItemError(null)
     setItemImageFile(null)
     setItemImagePreview(item.image_url || null)
-    setSizeName('')
-    setSizePriceModifier('')
+    setModifierName('')
+    setModifierPriceDelta('')
     setIsNewItem(false)
     try {
-      const itemSizes = await getSizesForMenuItem(item.id)
-      setSizes(itemSizes)
+      const itemModifiers = await getModifiersForMenuItem(item.id)
+      setModifiers(itemModifiers)
     } catch (error) {
-      console.error('Failed to load sizes:', error)
-      setSizes([])
+      console.error('Failed to load modifiers:', error)
+      setModifiers([])
     }
     setIsItemDialogOpen(true)
   }
@@ -256,23 +270,9 @@ export function MenuManagementClient({
       if (itemImageFile) {
         setIsUploadingImage(true)
         const compressed = await compressImage(itemImageFile)
-        const safeName = itemName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
-        const filePath = `${restaurantId}/${Date.now()}-${safeName}.webp`
-
-        const { error: uploadError } = await supabase.storage
-          .from('menu-images')
-          .upload(filePath, compressed, {
-            cacheControl: '3600',
-            upsert: false,
-            contentType: compressed.type,
-          })
-
-        if (uploadError) {
-          throw new Error(uploadError.message)
-        }
-
-        const { data } = supabase.storage.from('menu-images').getPublicUrl(filePath)
-        imageUrl = data.publicUrl
+        const formData = new FormData()
+        formData.append('file', compressed)
+        imageUrl = await uploadMenuItemImage(restaurantId, formData)
       }
 
       if (editingItemId) {
@@ -288,7 +288,7 @@ export function MenuManagementClient({
           },
           restaurantSlug
         )
-        await loadMenuData()
+        await refreshMenuAfterChange()
         setIsItemDialogOpen(false)
       } else {
         const newItem = await createMenuItem(
@@ -303,13 +303,13 @@ export function MenuManagementClient({
           },
           restaurantSlug
         )
-        // Stay in the dialog to allow adding sizes
         setEditingItemId(newItem.id)
         setIsNewItem(true)
-        setSizes([])
-        setSizeName('')
-        setSizePriceModifier('')
+        setModifiers([])
+        setModifierName('')
+        setModifierPriceDelta('')
         setItemError(null)
+        await refreshMenuAfterChange()
       }
     } catch (error: any) {
       setItemError(error.message || 'Failed to save menu item')
@@ -324,7 +324,7 @@ export function MenuManagementClient({
 
     try {
       await deleteMenuItem(deleteItemId, restaurantSlug)
-      await loadMenuData()
+      await refreshMenuAfterChange()
     } catch (error: any) {
       setItemError(error.message || 'Failed to delete menu item')
     } finally {
@@ -334,43 +334,49 @@ export function MenuManagementClient({
     }
   }
 
-  const handleAddSize = async () => {
+  const handleAddModifier = async () => {
     if (!editingItemId) return
-    if (!sizeName.trim()) {
-      setItemError('Size name is required')
+    if (!modifierName.trim()) {
+      setItemError('Modifier name is required')
       return
     }
-    const modifier = Number.parseFloat(sizePriceModifier || '0')
-    if (Number.isNaN(modifier)) {
-      setItemError('Price modifier must be a valid number')
+    const delta = Number.parseFloat(modifierPriceDelta || '0')
+    if (Number.isNaN(delta)) {
+      setItemError('Price change must be a valid number')
       return
     }
 
     try {
-      const newSize = await addSize(
+      await addMenuItemModifier(
         editingItemId,
         {
-          name: sizeName.trim(),
-          price_modifier: modifier,
+          name: modifierName.trim(),
+          price_modifier: delta,
         },
         restaurantSlug
       )
-      setSizes([...sizes, newSize])
-      setSizeName('')
-      setSizePriceModifier('')
+      setModifierName('')
+      setModifierPriceDelta('')
       setItemError(null)
+      await refreshMenuAfterChange()
+      const rows = await getModifiersForMenuItem(editingItemId)
+      setModifiers(rows)
     } catch (error: any) {
-      setItemError(error.message || 'Failed to add size')
+      setItemError(error.message || 'Failed to add modifier')
     }
   }
 
-  const handleDeleteSize = async (sizeId: string) => {
+  const handleDeleteModifier = async (modifierId: string) => {
     try {
-      await deleteSize(sizeId, restaurantSlug)
-      setSizes(sizes.filter(s => s.id !== sizeId))
+      await deleteMenuItemModifier(modifierId, restaurantSlug)
       setItemError(null)
+      await refreshMenuAfterChange()
+      if (editingItemId) {
+        const rows = await getModifiersForMenuItem(editingItemId)
+        setModifiers(rows)
+      }
     } catch (error: any) {
-      setItemError(error.message || 'Failed to delete size')
+      setItemError(error.message || 'Failed to delete modifier')
     }
   }
 
@@ -381,19 +387,16 @@ export function MenuManagementClient({
     setIsItemDialogOpen(open)
   }
 
-  const calculatePriceRange = (item: any, itemSizes?: any[]) => {
-    // Try to get sizes from the item object if not provided
-    const sizesForItem = itemSizes || (item.sizes || [])
-    
-    if (sizesForItem.length === 0) {
-      // No sizes, just return base price
+  const calculatePriceRange = (item: any, itemModifiers?: any[]) => {
+    const list = itemModifiers || item.modifiers || []
+
+    if (list.length === 0) {
       return formatCurrency(item.price)
     }
-    
-    // Calculate min and max with price modifiers
+
     const basePriceWithModifiers = [
       item.price,
-      ...sizesForItem.map((s: any) => item.price + s.price_modifier)
+      ...list.map((m: any) => item.price + m.price_modifier),
     ]
     
     const minPrice = Math.min(...basePriceWithModifiers)
@@ -537,7 +540,7 @@ export function MenuManagementClient({
                                       {item.description}
                                     </p>
                                   )}
-                                  <p className="text-sm font-bold tabular-nums">{calculatePriceRange(item, item.sizes)}</p>
+                                  <p className="text-sm font-bold tabular-nums">{calculatePriceRange(item, item.modifiers)}</p>
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 sm:justify-end">
@@ -616,7 +619,7 @@ export function MenuManagementClient({
                                 {item.description}
                               </p>
                             )}
-                            <p className="text-lg font-bold">{calculatePriceRange(item, item.sizes)}</p>
+                            <p className="text-lg font-bold">{calculatePriceRange(item, item.modifiers)}</p>
                           </div>
                           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                             <Label htmlFor={`switch-${item.id}`} className="sr-only">
@@ -675,7 +678,9 @@ export function MenuManagementClient({
 
           {isNewItem && (
             <Alert>
-              <AlertDescription>Item created! Add sizes on the right if needed, then click Done.</AlertDescription>
+              <AlertDescription>
+                Item created! Add modifiers on the right (drinks, sides, portions, etc.) if needed, then click Done.
+              </AlertDescription>
             </Alert>
           )}
 
@@ -763,26 +768,28 @@ export function MenuManagementClient({
               </div>
             </div>
 
-            {/* Right column — Sizes */}
+            {/* Right column — Modifiers */}
             <div className="space-y-4 sm:border-l sm:pl-6">
-              <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Sizes</p>
-              <p className="text-xs text-muted-foreground -mt-2">Add sizes with price modifiers (optional)</p>
+              <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Modifiers</p>
+              <p className="text-xs text-muted-foreground -mt-2">
+                Optional choices with price changes — e.g. drink, size, add-on (use 0 if no price change).
+              </p>
 
-              {sizes.length > 0 ? (
+              {modifiers.length > 0 ? (
                 <div className="space-y-2">
-                  {sizes.map(size => (
-                    <div key={size.id} className="flex items-center justify-between p-2.5 border rounded-lg bg-muted/40">
+                  {modifiers.map((row: any) => (
+                    <div key={row.id} className="flex items-center justify-between p-2.5 border rounded-lg bg-muted/40">
                       <div className="min-w-0">
-                        <p className="font-medium text-sm">{size.name}</p>
+                        <p className="font-medium text-sm">{row.name}</p>
                         <p className="text-xs text-muted-foreground tabular-nums">
-                          +{formatCurrency(size.price_modifier)}
+                          +{formatCurrency(row.price_modifier)}
                         </p>
                       </div>
                       <Button
                         size="icon"
                         variant="ghost"
                         className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
-                        onClick={() => handleDeleteSize(size.id)}
+                        onClick={() => handleDeleteModifier(row.id)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -791,32 +798,36 @@ export function MenuManagementClient({
                 </div>
               ) : (
                 <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
-                  No sizes added yet. Items will use the base price.
+                  No modifiers yet. Customers will pay the base price only.
                 </div>
               )}
 
               <Separator />
 
               <div className="space-y-2">
-                <p className="text-sm font-medium">Add Size</p>
+                <p className="text-sm font-medium">Add modifier</p>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <Label htmlFor="size-name" className="text-xs">Name</Label>
+                    <Label htmlFor="modifier-name" className="text-xs">
+                      Label
+                    </Label>
                     <Input
-                      id="size-name"
-                      value={sizeName}
-                      onChange={(e) => setSizeName(e.target.value)}
-                      placeholder="e.g., Large"
+                      id="modifier-name"
+                      value={modifierName}
+                      onChange={e => setModifierName(e.target.value)}
+                      placeholder="e.g. Large / Coke / Extra rice"
                       className="mt-1 h-9 text-sm"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="size-modifier" className="text-xs">Modifier (PHP)</Label>
+                    <Label htmlFor="modifier-price" className="text-xs">
+                      +Price (PHP)
+                    </Label>
                     <Input
-                      id="size-modifier"
+                      id="modifier-price"
                       type="number"
-                      value={sizePriceModifier}
-                      onChange={(e) => setSizePriceModifier(e.target.value)}
+                      value={modifierPriceDelta}
+                      onChange={e => setModifierPriceDelta(e.target.value)}
                       placeholder="0.00"
                       className="mt-1 h-9 text-sm"
                       step="0.01"
@@ -827,11 +838,11 @@ export function MenuManagementClient({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={handleAddSize}
+                  onClick={handleAddModifier}
                   className="w-full"
                 >
                   <Plus className="w-3.5 h-3.5 mr-1.5" />
-                  Add Size
+                  Add modifier
                 </Button>
               </div>
             </div>

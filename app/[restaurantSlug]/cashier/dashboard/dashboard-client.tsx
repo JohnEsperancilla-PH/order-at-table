@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useEffect, type ChangeEvent } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,8 +10,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Switch } from '@/components/ui/switch'
 import { updateRestaurant } from '@/lib/actions/restaurants'
+import { uploadRestaurantCoverImage } from '@/lib/actions/storage'
 import { Separator } from '@/components/ui/separator'
-import { createClient } from '@/lib/supabase/client'
 
 interface DashboardClientProps {
   initialRestaurant: {
@@ -30,6 +31,7 @@ interface DashboardClientProps {
 }
 
 export function DashboardClient({ initialRestaurant, restaurantSlug }: DashboardClientProps) {
+  const router = useRouter()
   const [name, setName] = useState(initialRestaurant.name)
   const [description, setDescription] = useState(initialRestaurant.description || '')
   const [coverImageUrl, setCoverImageUrl] = useState(initialRestaurant.cover_image_url || '')
@@ -47,17 +49,22 @@ export function DashboardClient({ initialRestaurant, restaurantSlug }: Dashboard
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const [isUploadingImage, setIsUploadingImage] = useState(false)
-  const supabase = createClient()
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data } = await supabase.auth.getUser()
-      setIsAuthenticated(!!data.user)
-    }
-    checkAuth()
-  }, [supabase.auth])
+    setName(initialRestaurant.name)
+    setDescription(initialRestaurant.description || '')
+    setCoverImageUrl(initialRestaurant.cover_image_url || '')
+    setCoverPreview(initialRestaurant.cover_image_url || null)
+    setCoverFile(null)
+    setIsOpen(initialRestaurant.is_open ?? true)
+    setOpeningHours(initialRestaurant.opening_hours || '')
+    setContactNumber(initialRestaurant.contact_number || '')
+    setServiceChargeRate(String(initialRestaurant.service_charge_rate ?? 0))
+    setTaxRate(String(initialRestaurant.tax_rate ?? 0))
+    setTaxMode(initialRestaurant.tax_mode === 'inclusive' ? 'inclusive' : 'exclusive')
+    setKitchenCutoffTime(initialRestaurant.kitchen_cutoff_time || '')
+  }, [initialRestaurant])
 
   const handleCoverChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -103,34 +110,23 @@ export function DashboardClient({ initialRestaurant, restaurantSlug }: Dashboard
     return new File([blob], `${file.name.split('.')[0]}.webp`, { type: 'image/webp' })
   }
 
+  async function compressAndUploadCover(file: File): Promise<string> {
+    const compressed = await compressImage(file)
+    const formData = new FormData()
+    formData.append('file', compressed)
+    return uploadRestaurantCoverImage(restaurantSlug, formData)
+  }
+
   const uploadCoverImage = async () => {
     if (!coverFile) return
-    if (isAuthenticated === false) {
-      setError('You are not authenticated. Please log in.')
-      return
-    }
     setError(null)
     setSuccess(null)
     setIsUploadingImage(true)
     try {
-      const compressed = await compressImage(coverFile)
-      const safeName = (name || 'restaurant').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'restaurant'
-      const filePath = `${restaurantSlug}/cover-${Date.now()}-${safeName}.webp`
-
-      const { error: uploadError } = await supabase.storage
-        .from('restaurant-images')
-        .upload(filePath, compressed, {
-          cacheControl: '3600',
-          upsert: false,
-          contentType: compressed.type,
-        })
-
-      if (uploadError) {
-        throw new Error(uploadError.message)
-      }
-
-      const { data } = supabase.storage.from('restaurant-images').getPublicUrl(filePath)
-      setCoverImageUrl(data.publicUrl)
+      const url = await compressAndUploadCover(coverFile)
+      setCoverImageUrl(url)
+      setCoverPreview(url)
+      setCoverFile(null)
       setSuccess('Image uploaded. Click Save to apply.')
     } catch (err: any) {
       setError(err.message || 'Failed to upload cover image')
@@ -145,13 +141,22 @@ export function DashboardClient({ initialRestaurant, restaurantSlug }: Dashboard
 
     startTransition(async () => {
       try {
+        let coverUrlForSave = coverImageUrl
         if (coverFile) {
-          await uploadCoverImage()
+          setIsUploadingImage(true)
+          try {
+            coverUrlForSave = await compressAndUploadCover(coverFile)
+            setCoverImageUrl(coverUrlForSave)
+            setCoverPreview(coverUrlForSave)
+            setCoverFile(null)
+          } finally {
+            setIsUploadingImage(false)
+          }
         }
         await updateRestaurant(initialRestaurant.id, {
           name: name.trim() || initialRestaurant.name,
           description: description.trim() || null,
-          cover_image_url: coverImageUrl.trim() || null,
+          cover_image_url: coverUrlForSave.trim() || null,
           is_open: isOpen,
           opening_hours: openingHours.trim() || null,
           contact_number: contactNumber.trim() || null,
@@ -161,6 +166,7 @@ export function DashboardClient({ initialRestaurant, restaurantSlug }: Dashboard
           kitchen_cutoff_time: kitchenCutoffTime || null,
         })
         setSuccess('Restaurant details updated')
+        router.refresh()
       } catch (err: any) {
         setError(err.message || 'Failed to update restaurant')
       }

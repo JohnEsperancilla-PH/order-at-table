@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useSyncedInitial } from '@/hooks/use-synced-initial'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,7 +27,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Plus, Edit, Trash2, QrCode, Copy, Check, TableProperties } from 'lucide-react'
 import { createTable, updateTable, deleteTable } from '@/lib/actions/tables'
-import { useRouter } from 'next/navigation'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface TablesManagementClientProps {
@@ -39,7 +40,7 @@ export function TablesManagementClient({
   restaurantSlug,
   restaurantId,
 }: TablesManagementClientProps) {
-  const [tables, setTables] = useState(initialTables)
+  const [tables] = useSyncedInitial(initialTables)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [selectedTable, setSelectedTable] = useState<any>(null)
@@ -49,6 +50,7 @@ export function TablesManagementClient({
   const [error, setError] = useState<string | null>(null)
   const [deleteTableId, setDeleteTableId] = useState<string | null>(null)
   const [copiedTableId, setCopiedTableId] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const router = useRouter()
 
   const handleOpenCreateDialog = () => {
@@ -73,6 +75,15 @@ export function TablesManagementClient({
       return
     }
 
+    let capacityNum: number | undefined
+    if (capacity.trim()) {
+      capacityNum = parseInt(capacity, 10)
+      if (Number.isNaN(capacityNum) || capacityNum < 1) {
+        setError('Capacity must be a whole number of at least 1')
+        return
+      }
+    }
+
     setIsSubmitting(true)
     setError(null)
 
@@ -81,17 +92,15 @@ export function TablesManagementClient({
         // Update existing table
         await updateTable(selectedTable.id, {
           table_number: tableNumber.trim(),
-          capacity: capacity ? parseInt(capacity) : undefined,
+          capacity: capacityNum,
         })
       } else {
         // Create new table
-        await createTable(
-          restaurantId,
-          tableNumber.trim(),
-          capacity ? parseInt(capacity) : undefined
-        )
+        await createTable(restaurantId, tableNumber.trim(), capacityNum)
       }
       router.refresh()
+      setNotice(selectedTable ? 'Table updated successfully.' : 'Table added successfully.')
+      setTimeout(() => setNotice(null), 5000)
       setIsDialogOpen(false)
     } catch (err: any) {
       setError(err.message || 'Failed to save table')
@@ -106,6 +115,8 @@ export function TablesManagementClient({
     try {
       await deleteTable(deleteTableId)
       router.refresh()
+      setNotice('Table removed.')
+      setTimeout(() => setNotice(null), 5000)
       setIsDeleteDialogOpen(false)
       setDeleteTableId(null)
     } catch (err: any) {
@@ -144,6 +155,12 @@ export function TablesManagementClient({
           Add Table
         </Button>
       </div>
+
+      {notice && (
+        <Alert className="border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950">
+          <AlertDescription className="text-emerald-800 dark:text-emerald-200">{notice}</AlertDescription>
+        </Alert>
+      )}
 
       {error && (
         <Alert variant="destructive">

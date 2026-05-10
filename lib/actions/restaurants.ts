@@ -1,10 +1,11 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
+import { getSession } from '@/lib/actions/auth'
 
 export async function getRestaurant(restaurantId: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data, error } = await supabase
     .from('restaurants')
@@ -20,7 +21,7 @@ export async function getRestaurant(restaurantId: string) {
 }
 
 export async function getRestaurantBySlug(slug: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data, error } = await supabase
     .from('restaurants')
@@ -36,7 +37,7 @@ export async function getRestaurantBySlug(slug: string) {
 }
 
 export async function getAllRestaurants() {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data, error } = await supabase
     .from('restaurants')
@@ -68,7 +69,7 @@ export async function createRestaurant(
     opening_hours?: string | null
   }
 ) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   const slug = generateSlug(name)
 
   const { data, error } = await supabase
@@ -110,7 +111,7 @@ export async function updateRestaurant(
     kitchen_cutoff_time?: string | null
   }
 ) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data, error } = await supabase
     .from('restaurants')
@@ -129,4 +130,53 @@ export async function updateRestaurant(
   revalidatePath('/table', 'layout')
 
   return data
+}
+
+export async function deleteRestaurant(restaurantId: string) {
+  const session = await getSession()
+  if (!session) {
+    throw new Error('You must be signed in to delete a restaurant')
+  }
+
+  const supabase = createServiceClient()
+
+  const { data: existing, error: fetchError } = await supabase
+    .from('restaurants')
+    .select('id, slug')
+    .eq('id', restaurantId)
+    .maybeSingle()
+
+  if (fetchError) {
+    throw new Error(`Failed to look up restaurant: ${fetchError.message}`)
+  }
+  if (!existing) {
+    throw new Error('Restaurant not found')
+  }
+
+  // Remove orders first so order_items disappear before menu_items CASCADE runs.
+  // Otherwise FK order_items_menu_item_id_fkey (ON DELETE RESTRICT) blocks menu_items deletes.
+  const { error: ordersError } = await supabase
+    .from('orders')
+    .delete()
+    .eq('restaurant_id', restaurantId)
+
+  if (ordersError) {
+    throw new Error(`Failed to delete restaurant orders: ${ordersError.message}`)
+  }
+
+  const { error } = await supabase.from('restaurants').delete().eq('id', restaurantId)
+
+  if (error) {
+    throw new Error(`Failed to delete restaurant: ${error.message}`)
+  }
+
+  revalidatePath('/admin')
+  revalidatePath('/admin/dashboard')
+  revalidatePath('/admin/restaurants')
+  revalidatePath('/admin/restaurants/accounts')
+  revalidatePath(`/${existing.slug}`, 'layout')
+  revalidatePath(`/${existing.slug}/cashier`, 'layout')
+  revalidatePath(`/${existing.slug}/table`, 'layout')
+
+  return { ok: true as const }
 }

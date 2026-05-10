@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Minus, Plus, Trash2, Search, ShoppingCart, User, Hash } from 'lucide-react'
 import { createOrder } from '@/lib/actions/orders'
+import type { CartItem } from '@/lib/types'
 import { formatCurrency } from '@/lib/utils'
 
 interface CounterOrderFormProps {
@@ -21,13 +22,6 @@ interface CounterOrderFormProps {
   tables: any[]
   menuItems: any[]
   onOrderCreated: () => void
-}
-
-interface CartItem {
-  menu_item: any
-  quantity: number
-  size_id: string | null
-  size?: any
 }
 
 export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrderCreated }: CounterOrderFormProps) {
@@ -79,8 +73,8 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
 
   const getItemPrice = useCallback((item: CartItem): number => {
     const basePrice = item.menu_item.price
-    const sizeAdjustment = item.size?.price_modifier || 0
-    return basePrice + sizeAdjustment
+    const modAdjustment = item.modifier?.price_modifier || 0
+    return basePrice + modAdjustment
   }, [])
 
   const totalAmount = useMemo(
@@ -93,41 +87,48 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
     return cart.filter(ci => ci.menu_item.id === itemId).reduce((sum, ci) => sum + ci.quantity, 0)
   }, [cart])
 
-  const addToCart = useCallback((item: any, sizeId: string | null = null) => {
+  const addToCart = useCallback((item: any, modifierId: string | null = null) => {
     setCart(prev => {
-      const existing = prev.find(ci => ci.menu_item.id === item.id && (ci.size_id || null) === (sizeId || null))
+      const existing = prev.find(ci => ci.menu_item.id === item.id && (ci.modifier_id || null) === (modifierId || null))
       if (existing) {
         return prev.map(ci =>
-          ci.menu_item.id === item.id && (ci.size_id || null) === (sizeId || null)
+          ci.menu_item.id === item.id && (ci.modifier_id || null) === (modifierId || null)
             ? { ...ci, quantity: ci.quantity + 1 }
             : ci
         )
       }
-      const size = item.sizes?.find((s: any) => s.id === sizeId)
-      return [...prev, { menu_item: item, quantity: 1, size_id: sizeId, size }]
+      const mod = item.modifiers?.find((m: any) => m.id === modifierId) ?? undefined
+      const lineId =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `line_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+      return [
+        ...prev,
+        {
+          lineId,
+          menu_item: item,
+          quantity: 1,
+          modifier_id: modifierId,
+          modifier: mod,
+        },
+      ]
     })
   }, [])
 
-  const removeFromCart = useCallback((itemId: string, sizeId: string | null = null) => {
-    setCart(prev => prev.filter(ci => !(ci.menu_item.id === itemId && (ci.size_id || null) === (sizeId || null))))
+  const removeFromCart = useCallback((lineId: string) => {
+    setCart(prev => prev.filter(ci => ci.lineId !== lineId))
   }, [])
 
-  const updateQuantity = useCallback((itemId: string, quantity: number, sizeId: string | null = null) => {
+  const updateQuantity = useCallback((lineId: string, quantity: number) => {
     if (quantity <= 0) {
-      setCart(prev => prev.filter(ci => !(ci.menu_item.id === itemId && (ci.size_id || null) === (sizeId || null))))
+      removeFromCart(lineId)
       return
     }
-    setCart(prev =>
-      prev.map(ci =>
-        ci.menu_item.id === itemId && (ci.size_id || null) === (sizeId || null)
-          ? { ...ci, quantity }
-          : ci
-      )
-    )
-  }, [])
+    setCart(prev => prev.map(ci => (ci.lineId === lineId ? { ...ci, quantity } : ci)))
+  }, [removeFromCart])
 
   const handleMenuItemClick = useCallback((item: any) => {
-    if (item.sizes && item.sizes.length > 0) {
+    if (item.modifiers && item.modifiers.length > 0) {
       setSizePickerItem(item)
       return
     }
@@ -176,6 +177,7 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
         menu_item_id: item.menu_item.id,
         quantity: item.quantity,
         price: getItemPrice(item),
+        modifier_id: item.modifier_id || undefined,
       }))
 
       await createOrder(
@@ -288,7 +290,7 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
                 ) : (
                   filteredMenuItems.map(item => {
                     const qty = getCartQuantity(item.id)
-                    const hasSizes = item.sizes && item.sizes.length > 0
+                    const hasModifiers = item.modifiers && item.modifiers.length > 0
                     return (
                       <div
                         key={item.id}
@@ -304,16 +306,16 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
                               </Badge>
                             )}
                           </div>
-                          <div className="flex items-center gap-2 mt-0.5">
+                            <div className="flex items-center gap-2 mt-0.5">
                             <p className="text-xs text-muted-foreground">
-                              {hasSizes
-                                ? `${formatCurrency(item.price + (item.sizes[0].price_modifier || 0))} – ${formatCurrency(item.price + (item.sizes[item.sizes.length - 1].price_modifier || 0))}`
+                              {hasModifiers
+                                ? `${formatCurrency(item.price + (item.modifiers[0].price_modifier || 0))} – ${formatCurrency(item.price + (item.modifiers[item.modifiers.length - 1].price_modifier || 0))}`
                                 : formatCurrency(item.price)
                               }
                             </p>
-                            {hasSizes && (
+                            {hasModifiers && (
                               <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                                {item.sizes.length} sizes
+                                {item.modifiers.length} options
                               </span>
                             )}
                           </div>
@@ -356,13 +358,13 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
                       const itemPrice = getItemPrice(item)
                       return (
                         <div
-                          key={`${item.menu_item.id}-${item.size_id || 'base'}`}
+                          key={item.lineId}
                           className="flex items-start gap-2 p-2 rounded-md bg-muted/40 text-sm"
                         >
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm leading-tight truncate">{item.menu_item.name}</p>
-                            {item.size && (
-                              <p className="text-[11px] text-muted-foreground">{item.size.name}</p>
+                            {item.modifier && (
+                              <p className="text-[11px] text-muted-foreground">{item.modifier.name}</p>
                             )}
                             <p className="text-xs text-muted-foreground mt-0.5">
                               {formatCurrency(itemPrice)} ea
@@ -373,7 +375,7 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
                               size="sm"
                               variant="ghost"
                               className="h-6 w-6 p-0"
-                              onClick={() => updateQuantity(item.menu_item.id, item.quantity - 1, item.size_id)}
+                              onClick={() => updateQuantity(item.lineId, item.quantity - 1)}
                             >
                               <Minus className="w-3 h-3" />
                             </Button>
@@ -382,7 +384,7 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
                               size="sm"
                               variant="ghost"
                               className="h-6 w-6 p-0"
-                              onClick={() => updateQuantity(item.menu_item.id, item.quantity + 1, item.size_id)}
+                              onClick={() => updateQuantity(item.lineId, item.quantity + 1)}
                             >
                               <Plus className="w-3 h-3" />
                             </Button>
@@ -395,7 +397,7 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
                               size="sm"
                               variant="ghost"
                               className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
-                              onClick={() => removeFromCart(item.menu_item.id, item.size_id)}
+                              onClick={() => removeFromCart(item.lineId)}
                             >
                               <Trash2 className="w-3 h-3" />
                             </Button>
@@ -435,30 +437,31 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
           </div>
         </div>
 
-        {/* Size Picker Dialog */}
+        {/* Modifier Picker Dialog */}
         {sizePickerItem && (
           <Dialog open={!!sizePickerItem} onOpenChange={(val) => { if (!val) setSizePickerItem(null) }}>
             <DialogContent className="sm:max-w-sm">
               <DialogHeader>
                 <DialogTitle>{sizePickerItem.name}</DialogTitle>
-                <DialogDescription>Select a size to add</DialogDescription>
+                <DialogDescription>Choose an option (size, drink, add-on, etc.)</DialogDescription>
               </DialogHeader>
               <div className="space-y-2">
-                {sizePickerItem.sizes.map((size: any) => {
-                  const sizePrice = sizePickerItem.price + (size.price_modifier || 0)
-                  const cartEntry = cart.find(ci => ci.menu_item.id === sizePickerItem.id && ci.size_id === size.id)
+                {sizePickerItem.modifiers.map((mod: any) => {
+                  const unitPrice = sizePickerItem.price + (mod.price_modifier || 0)
+                  const cartEntry = cart.find(ci => ci.menu_item.id === sizePickerItem.id && ci.modifier_id === mod.id)
                   return (
                     <button
-                      key={size.id}
+                      key={mod.id}
+                      type="button"
                       className="flex items-center justify-between w-full p-3 rounded-lg border hover:bg-muted/60 transition text-left"
                       onClick={() => {
-                        addToCart(sizePickerItem, size.id)
+                        addToCart(sizePickerItem, mod.id)
                         setSizePickerItem(null)
                       }}
                     >
                       <div>
-                        <p className="text-sm font-medium">{size.name}</p>
-                        <p className="text-xs text-muted-foreground">{formatCurrency(sizePrice)}</p>
+                        <p className="text-sm font-medium">{mod.name}</p>
+                        <p className="text-xs text-muted-foreground">{formatCurrency(unitPrice)}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         {cartEntry && (

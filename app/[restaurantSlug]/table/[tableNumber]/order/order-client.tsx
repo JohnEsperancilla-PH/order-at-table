@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -122,57 +123,85 @@ export function OrderPageClient({
     return () => clearTimeout(timeout)
   }, [addedMessage])
 
-  const addToCart = (item: MenuItem, sizeId?: string | null) => {
+  const normalizeInstructions = (s?: string | null) => (s || '').trim()
+
+  const lineUnitPrice = (line: CartItem) => {
+    const mod = line.modifier
+    return mod ? line.menu_item.price + mod.price_modifier : line.menu_item.price
+  }
+
+  const addToCart = (
+    item: MenuItem,
+    modifierId?: string | null,
+    specialInstructions?: string | null
+  ) => {
+    const mod =
+      modifierId != null && modifierId !== ''
+        ? item.modifiers?.find((m: { id: string }) => m.id === modifierId) ?? null
+        : null
+    const ni = normalizeInstructions(specialInstructions)
+
     setCart(prev => {
-      // Find existing item with the same menu_item_id AND size_id
       const existingIndex = prev.findIndex(
-        ci => ci.menu_item.id === item.id && (ci.size_id || null) === (sizeId || null)
+        ci =>
+          ci.menu_item.id === item.id &&
+          (ci.modifier_id || null) === (modifierId || null) &&
+          normalizeInstructions(ci.special_instructions) === ni
       )
-      
+
       if (existingIndex >= 0) {
-        // Increase quantity if same item and size already exists
         const newCart = [...prev]
         newCart[existingIndex] = {
           ...newCart[existingIndex],
-          quantity: newCart[existingIndex].quantity + 1
+          quantity: newCart[existingIndex].quantity + 1,
         }
         return newCart
       }
-      
-      // Add new item with size
-      return [...prev, { menu_item: item, quantity: 1, size_id: sizeId || null }]
+
+      const lineId =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `line_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+
+      return [
+        ...prev,
+        {
+          lineId,
+          menu_item: item,
+          quantity: 1,
+          modifier_id: modifierId || null,
+          modifier: mod ?? undefined,
+          special_instructions: ni || undefined,
+        },
+      ]
     })
-    
-    // Find the size name if sizeId is provided
-    const size = item.sizes?.find((s: any) => s.id === sizeId)
-    const sizeText = size ? ` (${size.name})` : ''
-    setAddedMessage(`${item.name}${sizeText} added to cart`)
+
+    const modText = mod ? ` (${mod.name})` : ''
+    setAddedMessage(`${item.name}${modText} added to cart`)
   }
 
-  const removeFromCart = (itemId: string, sizeId?: string | null) => {
-    setCart(prev => prev.filter(ci => !(ci.menu_item.id === itemId && (ci.size_id || null) === (sizeId || null))))
+  const removeFromCart = (lineId: string) => {
+    setCart(prev => prev.filter(ci => ci.lineId !== lineId))
   }
 
-  const updateQuantity = (itemId: string, quantity: number, sizeId?: string | null) => {
+  const updateQuantity = (lineId: string, quantity: number) => {
     if (quantity <= 0) {
-      removeFromCart(itemId, sizeId)
+      removeFromCart(lineId)
       return
     }
+    setCart(prev => prev.map(ci => (ci.lineId === lineId ? { ...ci, quantity } : ci)))
+  }
+
+  const setLineSpecialInstructions = (lineId: string, text: string) => {
+    const trimmed = text.trim()
     setCart(prev =>
       prev.map(ci =>
-        ci.menu_item.id === itemId && (ci.size_id || null) === (sizeId || null)
-          ? { ...ci, quantity }
-          : ci
+        ci.lineId === lineId ? { ...ci, special_instructions: trimmed || undefined } : ci
       )
     )
   }
 
-  const subtotal = cart.reduce((sum, item) => {
-    const itemPrice = item.size
-      ? item.menu_item.price + item.size.price_modifier
-      : item.menu_item.price
-    return sum + itemPrice * item.quantity
-  }, 0)
+  const subtotal = cart.reduce((sum, item) => sum + lineUnitPrice(item) * item.quantity, 0)
 
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0)
 
@@ -219,17 +248,13 @@ export function OrderPageClient({
         }
       }
 
-      const orderItems = cart.map(item => {
-        const itemPrice = item.size
-          ? item.menu_item.price + item.size.price_modifier
-          : item.menu_item.price
-        return {
-          menu_item_id: item.menu_item.id,
-          quantity: item.quantity,
-          price: itemPrice,
-          size_id: item.size_id || undefined,
-        }
-      })
+      const orderItems = cart.map(item => ({
+        menu_item_id: item.menu_item.id,
+        quantity: item.quantity,
+        price: lineUnitPrice(item),
+        modifier_id: item.modifier_id || undefined,
+        special_instructions: item.special_instructions?.trim() || undefined,
+      }))
 
       const order = await createOrder(
         table.id,
@@ -387,72 +412,68 @@ export function OrderPageClient({
                   <div className="space-y-4">
                     <ScrollArea className="max-h-[45vh]">
                       <div className="space-y-1">
-                        {cart.map((item, idx) => {
-                          const itemPrice = item.size ? item.menu_item.price + item.size.price_modifier : item.menu_item.price
+                        {cart.map(item => {
+                          const itemPrice = lineUnitPrice(item)
                           const lineTotal = itemPrice * item.quantity
-                          const cartKey = `${item.menu_item.id}-${item.size_id || 'nosize'}`
-                          
+
                           return (
-                            <div
-                              key={cartKey}
-                              className="flex items-center gap-3 p-2.5 rounded-lg"
-                            >
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium text-sm leading-tight">
-                                  {item.menu_item.name}
-                                </p>
-                                {item.size && (
-                                  <p className="text-[11px] text-primary font-medium">
-                                    {item.size.name}
+                            <div key={item.lineId} className="rounded-lg border border-border/60 p-2.5 space-y-2">
+                              <div className="flex items-start gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-sm leading-tight">{item.menu_item.name}</p>
+                                  {item.modifier && (
+                                    <p className="text-[11px] text-primary font-medium">{item.modifier.name}</p>
+                                  )}
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    {formatCurrency(itemPrice)} &times; {item.quantity} ={' '}
+                                    <span className="font-semibold text-foreground">
+                                      {formatCurrency(lineTotal)}
+                                    </span>
                                   </p>
-                                )}
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  {formatCurrency(itemPrice)} &times; {item.quantity} = <span className="font-semibold text-foreground">{formatCurrency(lineTotal)}</span>
-                                </p>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <Button
+                                    size="icon"
+                                    variant="outline"
+                                    className="h-8 w-8 rounded-full"
+                                    aria-label={`Decrease quantity for ${item.menu_item.name}`}
+                                    onClick={() => updateQuantity(item.lineId, item.quantity - 1)}
+                                  >
+                                    <Minus className="w-3 h-3" />
+                                  </Button>
+                                  <span className="w-6 text-center text-sm font-semibold tabular-nums">
+                                    {item.quantity}
+                                  </span>
+                                  <Button
+                                    size="icon"
+                                    variant="outline"
+                                    className="h-8 w-8 rounded-full"
+                                    aria-label={`Increase quantity for ${item.menu_item.name}`}
+                                    onClick={() => updateQuantity(item.lineId, item.quantity + 1)}
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                    aria-label={`Remove ${item.menu_item.name} from cart`}
+                                    onClick={() => removeFromCart(item.lineId)}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-1.5">
-                                <Button
-                                  size="icon"
-                                  variant="outline"
-                                  className="h-8 w-8 rounded-full"
-                                  aria-label={`Decrease quantity for ${item.menu_item.name}`}
-                                  onClick={() =>
-                                    updateQuantity(
-                                      item.menu_item.id,
-                                      item.quantity - 1,
-                                      item.size_id
-                                    )
-                                  }
-                                >
-                                  <Minus className="w-3 h-3" />
-                                </Button>
-                                <span className="w-6 text-center text-sm font-semibold tabular-nums">
-                                  {item.quantity}
-                                </span>
-                                <Button
-                                  size="icon"
-                                  variant="outline"
-                                  className="h-8 w-8 rounded-full"
-                                  aria-label={`Increase quantity for ${item.menu_item.name}`}
-                                  onClick={() =>
-                                    updateQuantity(
-                                      item.menu_item.id,
-                                      item.quantity + 1,
-                                      item.size_id
-                                    )
-                                  }
-                                >
-                                  <Plus className="w-3 h-3" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                  aria-label={`Remove ${item.menu_item.name} from cart`}
-                                  onClick={() => removeFromCart(item.menu_item.id, item.size_id)}
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
+                              <div>
+                                <Label className="text-[11px] text-muted-foreground">
+                                  Allergies &amp; special requests
+                                </Label>
+                                <Textarea
+                                  value={item.special_instructions ?? ''}
+                                  onChange={e => setLineSpecialInstructions(item.lineId, e.target.value)}
+                                  placeholder="Optional — e.g. nut allergy, no dairy, cooking preference"
+                                  className="mt-1 min-h-[64px] resize-none text-xs"
+                                />
                               </div>
                             </div>
                           )
@@ -510,20 +531,24 @@ export function OrderPageClient({
             {/* Order summary */}
             <div className="rounded-xl border bg-muted/30 divide-y max-h-44 overflow-y-auto">
               {cart.map(item => {
-                const price = item.size
-                  ? item.menu_item.price + item.size.price_modifier
-                  : item.menu_item.price
-                const cartKey = `${item.menu_item.id}-${item.size_id || 'nosize'}`
+                const price = lineUnitPrice(item)
                 return (
-                  <div key={cartKey} className="flex justify-between items-center px-4 py-2.5 text-sm">
+                  <div key={item.lineId} className="flex justify-between items-start gap-2 px-4 py-2.5 text-sm">
                     <div className="flex-1 min-w-0">
                       <span className="font-medium">{item.menu_item.name}</span>
-                      {item.size && (
-                        <span className="text-muted-foreground text-xs ml-1">({item.size.name})</span>
+                      {item.modifier && (
+                        <span className="text-muted-foreground text-xs ml-1">({item.modifier.name})</span>
                       )}
                       <span className="text-muted-foreground ml-1">&times;{item.quantity}</span>
+                      {item.special_instructions && (
+                        <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 leading-snug">
+                          Note: {item.special_instructions}
+                        </p>
+                      )}
                     </div>
-                    <span className="font-medium tabular-nums ml-3">{formatCurrency(price * item.quantity)}</span>
+                    <span className="font-medium tabular-nums shrink-0">
+                      {formatCurrency(price * item.quantity)}
+                    </span>
                   </div>
                 )
               })}
@@ -600,7 +625,7 @@ export function OrderConfirmationView({
   onStartNewOrder?: () => void
   onClose?: () => void
   restaurantName?: string
-  restaurantSlug: string
+  restaurantSlug?: string
   tableNumber?: string
   coverImageUrl?: string
 }) {

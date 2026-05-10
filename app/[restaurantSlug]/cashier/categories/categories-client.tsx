@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useSyncedInitial } from '@/hooks/use-synced-initial'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -31,7 +33,8 @@ export function CategoriesManagementClient({
   restaurantSlug,
   restaurantId,
 }: CategoriesManagementClientProps) {
-  const [categories, setCategories] = useState(initialCategories)
+  const router = useRouter()
+  const [categories, setCategories] = useSyncedInitial(initialCategories)
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false)
   const [categoryName, setCategoryName] = useState('')
   const [categoryDescription, setCategoryDescription] = useState('')
@@ -39,6 +42,8 @@ export function CategoriesManagementClient({
   const [editingCategory, setEditingCategory] = useState<MenuCategory | null>(null)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [deleteCategoryId, setDeleteCategoryId] = useState<string | null>(null)
+  const [categorySaving, setCategorySaving] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const handleOpenCategoryDialog = (category?: MenuCategory) => {
     setEditingCategory(category || null)
@@ -54,6 +59,8 @@ export function CategoriesManagementClient({
       return
     }
 
+    setCategorySaving(true)
+    setCategoryError(null)
     try {
       if (editingCategory) {
         const updated = await updateMenuCategory(
@@ -65,6 +72,7 @@ export function CategoriesManagementClient({
           restaurantSlug
         )
         setCategories(prev => prev.map(item => (item.id === updated.id ? updated : item)))
+        setNotice('Category updated.')
       } else {
         const created = await createMenuCategory(
           restaurantId,
@@ -73,10 +81,15 @@ export function CategoriesManagementClient({
           restaurantSlug
         )
         setCategories(prev => [...prev, created])
+        setNotice('Category created.')
       }
+      router.refresh()
+      setTimeout(() => setNotice(null), 5000)
       setIsCategoryDialogOpen(false)
     } catch (error: any) {
       setCategoryError(error.message || 'Failed to save category')
+    } finally {
+      setCategorySaving(false)
     }
   }
 
@@ -84,6 +97,10 @@ export function CategoriesManagementClient({
     try {
       const updated = await toggleMenuCategoryActive(categoryId, isActive, restaurantSlug)
       setCategories(prev => prev.map(item => (item.id === updated.id ? updated : item)))
+      setCategoryError(null)
+      setNotice(isActive ? 'Category is now active.' : 'Category hidden from menu.')
+      setTimeout(() => setNotice(null), 4000)
+      router.refresh()
     } catch (error: any) {
       setCategoryError(error.message || 'Failed to update category')
     }
@@ -95,6 +112,9 @@ export function CategoriesManagementClient({
     try {
       await deleteMenuCategory(deleteCategoryId, restaurantSlug)
       setCategories(prev => prev.filter(item => item.id !== deleteCategoryId))
+      router.refresh()
+      setNotice('Category deleted.')
+      setTimeout(() => setNotice(null), 5000)
       setIsDeleteDialogOpen(false)
       setDeleteCategoryId(null)
     } catch (error: any) {
@@ -117,6 +137,12 @@ export function CategoriesManagementClient({
           Add Category
         </Button>
       </div>
+
+      {notice && (
+        <Alert className="border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950">
+          <AlertDescription className="text-emerald-800 dark:text-emerald-200">{notice}</AlertDescription>
+        </Alert>
+      )}
 
       {categoryError && (
         <Alert variant="destructive">
@@ -248,8 +274,12 @@ export function CategoriesManagementClient({
               >
                 Cancel
               </Button>
-              <Button onClick={handleSaveCategory} className="flex-1">
-                {editingCategory ? 'Save Changes' : 'Create Category'}
+              <Button
+                onClick={handleSaveCategory}
+                className="flex-1"
+                disabled={categorySaving || !categoryName.trim()}
+              >
+                {categorySaving ? 'Saving…' : editingCategory ? 'Save Changes' : 'Create Category'}
               </Button>
             </div>
           </div>

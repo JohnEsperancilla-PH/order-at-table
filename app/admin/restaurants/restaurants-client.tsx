@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useSyncedInitial } from '@/hooks/use-synced-initial'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,6 +11,15 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -23,8 +34,9 @@ import {
   ArrowRight,
   LayoutGrid,
   List,
+  Trash2,
 } from 'lucide-react'
-import { createRestaurant } from '@/lib/actions/restaurants'
+import { createRestaurant, deleteRestaurant } from '@/lib/actions/restaurants'
 import { format } from 'date-fns'
 import {
   Select,
@@ -55,7 +67,8 @@ export function RestaurantsClient({
   initialRestaurants,
   firstTableByRestaurantId = {},
 }: RestaurantsClientProps) {
-  const [restaurants, setRestaurants] = useState<Restaurant[]>(initialRestaurants)
+  const router = useRouter()
+  const [restaurants, setRestaurants] = useSyncedInitial<Restaurant[]>(initialRestaurants)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -63,6 +76,9 @@ export function RestaurantsClient({
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed'>('all')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [restaurantToDelete, setRestaurantToDelete] = useState<Restaurant | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -112,6 +128,7 @@ export function RestaurantsClient({
       })
 
       setRestaurants((prev) => [newRestaurant, ...prev])
+      router.refresh()
       setSuccess(`Restaurant "${newRestaurant.name}" created. Slug: ${newRestaurant.slug}`)
 
       setFormData({
@@ -129,6 +146,22 @@ export function RestaurantsClient({
       setError(err instanceof Error ? err.message : 'Failed to create restaurant')
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!restaurantToDelete) return
+    setDeleteError(null)
+    setIsDeleting(true)
+    try {
+      await deleteRestaurant(restaurantToDelete.id)
+      setRestaurants((prev) => prev.filter((r) => r.id !== restaurantToDelete.id))
+      router.refresh()
+      setRestaurantToDelete(null)
+    } catch (err: unknown) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete restaurant')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -295,6 +328,19 @@ export function RestaurantsClient({
                       Accounts <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                   </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => {
+                      setDeleteError(null)
+                      setRestaurantToDelete(restaurant)
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </Button>
                 </div>
               </div>
             ))}
@@ -308,16 +354,31 @@ export function RestaurantsClient({
               className="flex flex-col transition-all hover:-translate-y-0.5 hover:shadow-md"
             >
               <CardHeader className="pb-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <CardTitle className="line-clamp-2 text-base">{restaurant.name}</CardTitle>
-                    <CardDescription className="mt-1 font-mono text-xs">
-                      {restaurant.slug}
-                    </CardDescription>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <CardTitle className="line-clamp-2 text-base">{restaurant.name}</CardTitle>
+                      <CardDescription className="mt-1 font-mono text-xs">
+                        {restaurant.slug}
+                      </CardDescription>
+                    </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Badge variant={restaurant.is_open ? 'default' : 'secondary'}>
+                      {restaurant.is_open ? 'Open' : 'Closed'}
+                    </Badge>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      title="Delete restaurant"
+                      onClick={() => {
+                        setDeleteError(null)
+                        setRestaurantToDelete(restaurant)
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Badge variant={restaurant.is_open ? 'default' : 'secondary'} className="shrink-0">
-                    {restaurant.is_open ? 'Open' : 'Closed'}
-                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="flex flex-1 flex-col gap-3 pt-0">
@@ -448,6 +509,38 @@ export function RestaurantsClient({
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!restaurantToDelete}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRestaurantToDelete(null)
+            setDeleteError(null)
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete restaurant?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes{' '}
+              <span className="font-medium text-foreground">{restaurantToDelete?.name}</span> and all
+              related data (menu, orders, tables, staff accounts). This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteError && (
+            <Alert variant="destructive">
+              <AlertDescription>{deleteError}</AlertDescription>
+            </Alert>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <Button variant="destructive" onClick={handleConfirmDelete} disabled={isDeleting}>
+              {isDeleting ? 'Deleting…' : 'Delete restaurant'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

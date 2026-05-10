@@ -56,10 +56,10 @@ export interface MenuItem {
   is_available: boolean
   created_at: string
   updated_at: string
-  sizes?: Size[]
+  modifiers?: MenuItemModifier[]
 }
 
-export interface Size {
+export interface MenuItemModifier {
   id: string
   menu_item_id: string
   name: string
@@ -97,9 +97,11 @@ export interface OrderItem {
   menu_item_id: string
   quantity: number
   price: number
-  size_id?: string | null
+  modifier_id?: string | null
+  special_instructions?: string | null
   created_at: string
   menu_item?: MenuItem
+  menu_item_modifiers?: { id: string; name: string } | null
 }
 
 export interface DiscountCode {
@@ -132,9 +134,11 @@ export interface Inventory {
 }
 
 export interface CartItem {
+  lineId: string
   menu_item: MenuItem
   quantity: number
-  size_id?: string | null
-  size?: Size | null
+  modifier_id?: string | null
+  modifier?: MenuItemModifier | null
+  special_instructions?: string | null
 }
 
