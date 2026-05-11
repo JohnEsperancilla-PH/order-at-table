@@ -44,13 +44,14 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  // Handle cashier routes (staff session auth)
-  const cashierMatch = pathname.match(/^\/([^/]+)\/cashier/)
-  if (cashierMatch) {
-    const restaurantSlug = cashierMatch[1]
+  // Handle cashier and kitchen routes (staff session auth)
+  const staffMatch = pathname.match(/^\/([^/]+)\/(cashier|kitchen)/)
+  if (staffMatch) {
+    const restaurantSlug = staffMatch[1]
+    const subRoute = staffMatch[2]
 
     // Allow login page
-    if (pathname === `/${restaurantSlug}/cashier/login`) {
+    if (pathname === `/${restaurantSlug}/${subRoute}/login`) {
       return response
     }
 
@@ -60,7 +61,7 @@ export async function middleware(request: NextRequest) {
     // Reject if no cookie or invalid UUID format
     if (!staffId || !UUID_REGEX.test(staffId)) {
       const redirectUrl = request.nextUrl.clone()
-      redirectUrl.pathname = `/${restaurantSlug}/cashier/login`
+      redirectUrl.pathname = `/${restaurantSlug}/${subRoute}/login`
       redirectUrl.searchParams.set('redirectedFrom', request.nextUrl.pathname)
       return NextResponse.redirect(redirectUrl)
     }
@@ -94,7 +95,7 @@ export async function middleware(request: NextRequest) {
 
       if (!isValid) {
         const redirectUrl = request.nextUrl.clone()
-        redirectUrl.pathname = `/${restaurantSlug}/cashier/login`
+        redirectUrl.pathname = `/${restaurantSlug}/${subRoute}/login`
         redirectUrl.searchParams.set('redirectedFrom', request.nextUrl.pathname)
         return NextResponse.redirect(redirectUrl)
       }
@@ -109,6 +110,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/:slug/cashier/:path*'],
+  matcher: ['/admin/:path*', '/:slug/cashier/:path*', '/:slug/kitchen/:path*'],
 }
 

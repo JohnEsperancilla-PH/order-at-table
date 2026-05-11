@@ -2,6 +2,7 @@ export type OrderStatus =
   | 'pending'
   | 'awaiting_cashier_confirmation'
   | 'confirmed'
+  | 'ready_for_pickup'
   | 'completed'
   | 'cancelled'
 
@@ -18,6 +19,10 @@ export interface Restaurant {
   tax_rate?: number
   tax_mode?: 'inclusive' | 'exclusive'
   kitchen_cutoff_time?: string | null
+  latitude: number | null
+  longitude: number | null
+  geofence_radius_meters: number | null
+  geofence_enabled: boolean
   created_at: string
   updated_at: string
 }

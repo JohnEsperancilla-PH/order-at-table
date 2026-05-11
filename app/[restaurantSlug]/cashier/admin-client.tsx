@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -41,6 +41,149 @@ type CashierOrder = Order & {
   expires_at?: string | null
 }
 
+// Memoized Order Card component
+const OrderCard = memo(function OrderCard({ 
+  order, 
+  enableBulkActions, 
+  isSelected, 
+  onToggleSelection, 
+  onResendReceipt, 
+  onDetails, 
+  onConfirmPayment, 
+  onUpdateStatus,
+  getStatusBadge
+}: { 
+  order: CashierOrder, 
+  enableBulkActions: boolean, 
+  isSelected: boolean, 
+  onToggleSelection: (id: string, checked: boolean) => void,
+  onResendReceipt: (id: string) => void,
+  onDetails: (order: CashierOrder) => void,
+  onConfirmPayment: (order: CashierOrder) => void,
+  onUpdateStatus: (id: string, status: OrderStatus) => void,
+  getStatusBadge: (status: OrderStatus) => React.ReactNode
+}) {
+  return (
+    <Card
+      className={`overflow-hidden transition-all duration-200 hover:shadow-md ${
+        order.status === 'awaiting_cashier_confirmation'
+          ? 'border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-amber-950/10'
+          : order.status === 'pending'
+            ? 'border-blue-200 dark:border-blue-800'
+            : ''
+      }`}
+    >
+      <CardContent className="space-y-3 p-4">
+        <div className="flex items-center justify-between gap-2">
+          {enableBulkActions ? (
+            <Button
+              size="default"
+              variant={isSelected ? 'default' : 'outline'}
+              className="h-10 min-w-28"
+              onClick={() => onToggleSelection(order.id, !isSelected)}
+            >
+              {isSelected ? 'Selected' : 'Select'}
+            </Button>
+          ) : (
+            <span className="text-xs text-muted-foreground">Order Tools</span>
+          )}
+          <Button
+            size="default"
+            variant="ghost"
+            className="h-10 px-3"
+            onClick={() => onResendReceipt(order.id)}
+          >
+            <Receipt className="w-3.5 h-3.5 mr-1" />
+            Resend Receipt
+          </Button>
+        </div>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="font-mono text-xl font-bold tracking-wider">
+              {order.confirmation_code}
+            </p>
+            <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+              <span>Table {order.tables?.table_number || 'N/A'}</span>
+              <span className="text-muted-foreground/40">&middot;</span>
+              <span>{format(new Date(order.created_at), 'MMM d, HH:mm')}</span>
+            </div>
+            {order.customer_name && (
+              <div className="mt-2 text-sm">
+                <span className="text-muted-foreground">Customer: </span>
+                <span className="font-medium text-foreground">{order.customer_name}</span>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col gap-2 items-end">
+            {getStatusBadge(order.status)}
+            <Badge variant={order.customer_session_id ? 'secondary' : 'outline'}>
+              {order.customer_session_id ? 'Table Order' : 'Counter Order'}
+            </Badge>
+            <Badge variant="outline">Receipts: {order.receipt_resent_count || 0}</Badge>
+          </div>
+        </div>
+        <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
+          <span className="text-sm text-muted-foreground">{order.order_items?.length || '—'} items</span>
+          <span className="text-lg font-bold tabular-nums">
+            {formatCurrency(order.total_amount)}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="default"
+            variant="ghost"
+            className="h-10 px-3"
+            onClick={() => onDetails(order)}
+          >
+            <Eye className="w-3.5 h-3.5 mr-1" />
+            Details
+          </Button>
+          {order.status === 'awaiting_cashier_confirmation' && (
+            <>
+              <Button
+                size="default"
+                className="h-10 px-4 text-sm flex-1"
+                onClick={() => onConfirmPayment(order)}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                Confirm Payment
+              </Button>
+              <Button
+                size="default"
+                variant="outline"
+                className="h-10 px-3 text-sm text-destructive hover:text-destructive"
+                onClick={() => onUpdateStatus(order.id, 'cancelled')}
+              >
+                <XCircle className="w-3.5 h-3.5" />
+              </Button>
+            </>
+          )}
+          {order.status === 'confirmed' && (
+            <Button
+              size="default"
+              className="h-10 px-4 text-sm flex-1"
+              onClick={() => onUpdateStatus(order.id, 'completed')}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+              Mark Complete
+            </Button>
+          )}
+          {order.status === 'ready_for_pickup' && (
+            <Button
+              size="default"
+              className="h-10 px-4 text-sm flex-1 bg-amber-600 hover:bg-amber-700"
+              onClick={() => onUpdateStatus(order.id, 'completed')}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+              Mark Delivered
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+})
+
 export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [], restaurantSlug }: AdminDashboardClientProps) {
   const [isMounted, setIsMounted] = useState(false)
   const [orders, setOrders] = useState<CashierOrder[]>(initialOrders)
@@ -69,8 +212,68 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
   const [cashReceived, setCashReceived] = useState('')
   const [paymentError, setPaymentError] = useState<string | null>(null)
   const [isConfirmingPayment, setIsConfirmingPayment] = useState(false)
+  
+  const ordersRef = useRef(orders)
+  ordersRef.current = orders
 
-  const loadOrders = async (status?: string, silent = false) => {
+  const filteredOrders = useMemo(() => {
+    return orders.filter(order => {
+      if (activeTab === 'incoming') {
+        return ['pending', 'awaiting_cashier_confirmation', 'confirmed', 'ready_for_pickup'].includes(order.status)
+      }
+      return order.status === activeTab
+    })
+  }, [orders, activeTab])
+
+  const uniqueTableNumbers = useMemo(() => {
+    return Array.from(
+      new Set(
+        orders
+          .map(order => String(order.tables?.table_number || ''))
+          .filter(Boolean)
+      )
+    )
+  }, [orders])
+
+  const { awaitingCount, pendingCount, incomingCount } = useMemo(() => {
+    return {
+      awaitingCount: orders.filter(o => o.status === 'awaiting_cashier_confirmation').length,
+      pendingCount: orders.filter(o => o.status === 'pending').length,
+      incomingCount: orders.filter(o => ['pending', 'awaiting_cashier_confirmation', 'confirmed', 'ready_for_pickup'].includes(o.status)).length
+    }
+  }, [orders])
+
+  const searchQuery = searchCode.trim().toUpperCase()
+  
+  const displayedOrders = useMemo(() => {
+    return filteredOrders.filter(order => {
+      const tableMatch =
+        tableFilter === 'all' ||
+        String(order.tables?.table_number || '') === tableFilter
+
+      const statusMatch = statusFilter === 'all' || order.status === statusFilter
+
+      const sourceMatch =
+        sourceFilter === 'all' ||
+        (sourceFilter === 'table' && !!order.customer_session_id) ||
+        (sourceFilter === 'counter' && !order.customer_session_id)
+
+      const orderAgeMs = referenceNow - new Date(order.created_at).getTime()
+      const timeMatch =
+        timeFilter === 'all' ||
+        (timeFilter === '15m' && orderAgeMs <= 15 * 60 * 1000) ||
+        (timeFilter === '1h' && orderAgeMs <= 60 * 60 * 1000) ||
+        (timeFilter === 'today' && orderAgeMs <= 24 * 60 * 60 * 1000)
+
+      const searchMatch =
+        !searchQuery ||
+        order.confirmation_code?.toUpperCase().includes(searchQuery)
+
+      return tableMatch && statusMatch && sourceMatch && timeMatch && searchMatch
+    })
+  }, [filteredOrders, tableFilter, statusFilter, sourceFilter, timeFilter, referenceNow, searchQuery])
+
+  const loadOrders = useCallback(async (status?: string, silent = false) => {
     if (!silent) setLoadError(null)
     setIsRefreshing(true)
     if (!silent) {
@@ -80,12 +283,22 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
       const data = status && status !== 'all' && status !== 'incoming'
         ? await getOrdersByStatusAndRestaurantSlug(status, restaurantSlug)
         : await getAllOrdersByRestaurantSlug(restaurantSlug)
-      setOrders(data as CashierOrder[])
+      
+      const freshOrders = data as CashierOrder[]
+      
+      // Optimization: Only update state if data actually changed
+      const currentHash = JSON.stringify(ordersRef.current)
+      const freshHash = JSON.stringify(freshOrders)
+      
+      if (currentHash !== freshHash) {
+        setOrders(freshOrders)
+      }
+      
       setLoadError(null)
 
       // Update selected order if it exists
       if (selectedOrder) {
-        const updatedOrder = (data as CashierOrder[]).find((o) => o.id === selectedOrder.id)
+        const updatedOrder = freshOrders.find((o) => o.id === selectedOrder.id)
         if (updatedOrder) {
           setSelectedOrder(updatedOrder)
         }
@@ -96,7 +309,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
       setIsLoading(false)
       setIsRefreshing(false)
     }
-  }
+  }, [restaurantSlug, selectedOrder])
 
   useEffect(() => {
     setIsMounted(true)
@@ -157,15 +370,13 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
       window.removeEventListener('cashier-controls-update', handleControlsUpdate as EventListener)
       window.removeEventListener('cashier-refresh-request', handleRefreshRequest)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, restaurantSlug])
+  }, [activeTab, restaurantSlug, loadOrders])
 
   useEffect(() => {
     if (activeTab) {
       loadOrders(activeTab === 'incoming' ? undefined : activeTab)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, restaurantSlug])
+  }, [activeTab, restaurantSlug, loadOrders])
 
   // Auto-refresh effect
   useEffect(() => {
@@ -176,7 +387,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
     }, liveIntervalSeconds * 1000)
 
     return () => clearInterval(interval)
-  }, [autoRefresh, activeTab, restaurantSlug, liveIntervalSeconds])
+  }, [autoRefresh, activeTab, restaurantSlug, liveIntervalSeconds, loadOrders])
 
   useEffect(() => {
     setReferenceNow(Date.now())
@@ -187,7 +398,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
     setSelectedOrderIds(prev => prev.filter(id => currentIds.has(id)))
   }, [orders])
 
-  const handleVerifyCode = () => {
+  const handleVerifyCode = useCallback(() => {
     const query = searchCode.trim().toUpperCase()
     if (!query) return
 
@@ -197,9 +408,9 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
 
     setVerifyError(hasMatch ? null : 'Order not found')
     setSearchResultId(hasMatch ? query : null)
-  }
+  }, [searchCode, filteredOrders])
 
-  const handleUpdateStatus = async (orderId: string, status: OrderStatus) => {
+  const handleUpdateStatus = useCallback(async (orderId: string, status: OrderStatus) => {
     setStatusUpdateError(null)
     try {
       await updateOrderStatus(restaurantSlug, orderId, status as any)
@@ -210,18 +421,18 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
     } catch (error: unknown) {
       setStatusUpdateError(error instanceof Error ? error.message : 'Failed to update order status')
     }
-  }
+  }, [restaurantSlug, activeTab, loadOrders, selectedOrder?.id])
 
-  const toggleOrderSelection = (orderId: string, checked: boolean) => {
+  const toggleOrderSelection = useCallback((orderId: string, checked: boolean) => {
     setSelectedOrderIds(prev => {
       if (checked) {
         return prev.includes(orderId) ? prev : [...prev, orderId]
       }
       return prev.filter(id => id !== orderId)
     })
-  }
+  }, [])
 
-  const handleBulkStatusUpdate = async (status: 'confirmed' | 'completed' | 'cancelled') => {
+  const handleBulkStatusUpdate = useCallback(async (status: 'confirmed' | 'completed' | 'cancelled') => {
     if (selectedOrderIds.length === 0) return
     setStatusUpdateError(null)
     setIsBulkUpdating(true)
@@ -235,9 +446,9 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
     } finally {
       setIsBulkUpdating(false)
     }
-  }
+  }, [restaurantSlug, selectedOrderIds, activeTab, loadOrders])
 
-  const handleResendReceipt = async (orderId: string) => {
+  const handleResendReceipt = useCallback(async (orderId: string) => {
     setStatusUpdateError(null)
     try {
       await resendReceipt(restaurantSlug, orderId)
@@ -245,15 +456,15 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
     } catch (error: unknown) {
       setStatusUpdateError(error instanceof Error ? error.message : 'Failed to resend receipt')
     }
-  }
+  }, [restaurantSlug, activeTab, loadOrders])
 
-  const openPaymentDialog = (order: CashierOrder) => {
+  const openPaymentDialog = useCallback((order: CashierOrder) => {
     setPaymentOrder(order)
     setCashReceived(String(order.total_amount ?? ''))
     setPaymentError(null)
-  }
+  }, [])
 
-  const handleConfirmPayment = async () => {
+  const handleConfirmPayment = useCallback(async () => {
     if (!paymentOrder) return
 
     const total = Number(paymentOrder.total_amount || 0)
@@ -284,7 +495,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
     } finally {
       setIsConfirmingPayment(false)
     }
-  }
+  }, [paymentOrder, cashReceived, restaurantSlug, activeTab, loadOrders])
 
   useEffect(() => {
     if (!keyboardMode) return
@@ -319,13 +530,14 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [keyboardMode, activeTab])
+  }, [keyboardMode, activeTab, loadOrders])
 
-  const getStatusBadge = (status: OrderStatus) => {
+  const getStatusBadge = useCallback((status: OrderStatus) => {
     const variants: Record<OrderStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
       pending: 'outline',
       awaiting_cashier_confirmation: 'secondary',
       confirmed: 'default',
+      ready_for_pickup: 'outline', // We'll style this specially below
       completed: 'default',
       cancelled: 'destructive',
     }
@@ -334,6 +546,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
       pending: Clock,
       awaiting_cashier_confirmation: Package,
       confirmed: CheckCircle2,
+      ready_for_pickup: RefreshCw,
       completed: CheckCircle2,
       cancelled: XCircle,
     }
@@ -341,58 +554,15 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
     const Icon = icons[status]
 
     return (
-      <Badge variant={variants[status]} className="flex items-center gap-1">
-        <Icon className="w-3 h-3" />
+      <Badge 
+        variant={variants[status]} 
+        className={`flex items-center gap-1 ${status === 'ready_for_pickup' ? 'border-amber-500 text-amber-600 dark:text-amber-400' : ''}`}
+      >
+        <Icon className={`w-3 h-3 ${status === 'ready_for_pickup' ? 'animate-pulse' : ''}`} />
         {status.replace(/_/g, ' ').toUpperCase()}
       </Badge>
     )
-  }
-
-  const filteredOrders = orders.filter(order => {
-    if (activeTab === 'incoming') {
-      return ['pending', 'awaiting_cashier_confirmation', 'confirmed'].includes(order.status)
-    }
-    return order.status === activeTab
-  })
-
-  const searchQuery = searchCode.trim().toUpperCase()
-  const displayedOrders = filteredOrders.filter(order => {
-    const tableMatch =
-      tableFilter === 'all' ||
-      String(order.tables?.table_number || '') === tableFilter
-
-    const statusMatch = statusFilter === 'all' || order.status === statusFilter
-
-    const sourceMatch =
-      sourceFilter === 'all' ||
-      (sourceFilter === 'table' && !!order.customer_session_id) ||
-      (sourceFilter === 'counter' && !order.customer_session_id)
-
-    const orderAgeMs = referenceNow - new Date(order.created_at).getTime()
-    const timeMatch =
-      timeFilter === 'all' ||
-      (timeFilter === '15m' && orderAgeMs <= 15 * 60 * 1000) ||
-      (timeFilter === '1h' && orderAgeMs <= 60 * 60 * 1000) ||
-      (timeFilter === 'today' && orderAgeMs <= 24 * 60 * 60 * 1000)
-
-    const searchMatch =
-      !searchQuery ||
-      order.confirmation_code?.toUpperCase().includes(searchQuery)
-
-    return tableMatch && statusMatch && sourceMatch && timeMatch && searchMatch
-  })
-
-  const uniqueTableNumbers = Array.from(
-    new Set(
-      orders
-        .map(order => String(order.tables?.table_number || ''))
-        .filter(Boolean)
-    )
-  )
-
-  const awaitingCount = orders.filter(o => o.status === 'awaiting_cashier_confirmation').length
-  const pendingCount = orders.filter(o => o.status === 'pending').length
-  const incomingCount = orders.filter(o => ['pending', 'awaiting_cashier_confirmation', 'confirmed'].includes(o.status)).length
+  }, [])
 
   if (!isMounted) {
     return (
@@ -684,117 +854,18 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                   <ScrollArea className="h-[calc(100dvh-18rem)] min-h-[260px] max-h-[65dvh] sm:min-h-[320px]">
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                       {displayedOrders.map((order) => (
-                        <Card
+                        <OrderCard 
                           key={order.id}
-                          className={`overflow-hidden transition-all duration-200 hover:shadow-md ${
-                            order.status === 'awaiting_cashier_confirmation'
-                              ? 'border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-amber-950/10'
-                              : order.status === 'pending'
-                                ? 'border-blue-200 dark:border-blue-800'
-                                : ''
-                          }`}
-                        >
-                          <CardContent className="space-y-3 p-4">
-                            <div className="flex items-center justify-between gap-2">
-                              {enableBulkActions ? (
-                                <Button
-                                  size="default"
-                                  variant={selectedOrderIds.includes(order.id) ? 'default' : 'outline'}
-                                  className="h-10 min-w-28"
-                                  onClick={() => toggleOrderSelection(order.id, !selectedOrderIds.includes(order.id))}
-                                >
-                                  {selectedOrderIds.includes(order.id) ? 'Selected' : 'Select'}
-                                </Button>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">Order Tools</span>
-                              )}
-                              <Button
-                                size="default"
-                                variant="ghost"
-                                className="h-10 px-3"
-                                onClick={() => handleResendReceipt(order.id)}
-                              >
-                                <Receipt className="w-3.5 h-3.5 mr-1" />
-                                Resend Receipt
-                              </Button>
-                            </div>
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="font-mono text-xl font-bold tracking-wider">
-                                  {order.confirmation_code}
-                                </p>
-                                <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-                                  <span>Table {order.tables?.table_number || 'N/A'}</span>
-                                  <span className="text-muted-foreground/40">&middot;</span>
-                                  <span>{format(new Date(order.created_at), 'MMM d, HH:mm')}</span>
-                                </div>
-                                {order.customer_name && (
-                                  <div className="mt-2 text-sm">
-                                    <span className="text-muted-foreground">Customer: </span>
-                                    <span className="font-medium text-foreground">{order.customer_name}</span>
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex flex-col gap-2 items-end">
-                                {getStatusBadge(order.status)}
-                                <Badge variant={order.customer_session_id ? 'secondary' : 'outline'}>
-                                  {order.customer_session_id ? 'Table Order' : 'Counter Order'}
-                                </Badge>
-                                <Badge variant="outline">Receipts: {order.receipt_resent_count || 0}</Badge>
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
-                              <span className="text-sm text-muted-foreground">{order.order_items?.length || '—'} items</span>
-                              <span className="text-lg font-bold tabular-nums">
-                                {formatCurrency(order.total_amount)}
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              <Button
-                                size="default"
-                                variant="ghost"
-                                className="h-10 px-3"
-                                onClick={() => {
-                                  const found = orders.find((o) => o.id === order.id)
-                                  setSelectedOrder(found || order)
-                                }}
-                              >
-                                <Eye className="w-3.5 h-3.5 mr-1" />
-                                Details
-                              </Button>
-                              {order.status === 'awaiting_cashier_confirmation' && (
-                                <>
-                                  <Button
-                                    size="default"
-                                    className="h-10 px-4 text-sm flex-1"
-                                    onClick={() => openPaymentDialog(order)}
-                                  >
-                                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                                    Confirm Payment
-                                  </Button>
-                                  <Button
-                                    size="default"
-                                    variant="outline"
-                                    className="h-10 px-3 text-sm text-destructive hover:text-destructive"
-                                    onClick={() => handleUpdateStatus(order.id, 'cancelled')}
-                                  >
-                                    <XCircle className="w-3.5 h-3.5" />
-                                  </Button>
-                                </>
-                              )}
-                              {order.status === 'confirmed' && (
-                                <Button
-                                  size="default"
-                                  className="h-10 px-4 text-sm flex-1"
-                                  onClick={() => handleUpdateStatus(order.id, 'completed')}
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                                  Mark Complete
-                                </Button>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
+                          order={order}
+                          enableBulkActions={enableBulkActions}
+                          isSelected={selectedOrderIds.includes(order.id)}
+                          onToggleSelection={toggleOrderSelection}
+                          onResendReceipt={handleResendReceipt}
+                          onDetails={setSelectedOrder}
+                          onConfirmPayment={openPaymentDialog}
+                          onUpdateStatus={handleUpdateStatus}
+                          getStatusBadge={getStatusBadge}
+                        />
                       ))}
                     </div>
                   </ScrollArea>

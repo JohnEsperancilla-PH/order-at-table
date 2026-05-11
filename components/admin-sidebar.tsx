@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/sidebar'
 import {
   LayoutDashboard,
+  LayoutGrid,
   Utensils,
   Table as TableIcon,
   Tags,
@@ -45,6 +46,19 @@ export function AdminSidebar({ restaurantSlug }: AdminSidebarProps) {
 
   const getPrimaryMenuItems = (slug?: string) => {
     if (slug) {
+      const isKitchenView = pathname.startsWith(`/${slug}/kitchen`)
+
+      if (isKitchenView) {
+        // Kitchen-only navigation
+        return [
+          {
+            title: 'Kitchen Display',
+            url: `/${slug}/kitchen`,
+            icon: LayoutGrid,
+          },
+        ]
+      }
+
       // Restaurant cashier navigation
       return [
         {
@@ -56,6 +70,11 @@ export function AdminSidebar({ restaurantSlug }: AdminSidebarProps) {
           title: 'Orders',
           url: `/${slug}/cashier`,
           icon: LayoutDashboard,
+        },
+        {
+          title: 'Kitchen',
+          url: `/${slug}/kitchen`,
+          icon: LayoutGrid,
         },
         {
           title: 'Tables',
@@ -106,9 +125,12 @@ export function AdminSidebar({ restaurantSlug }: AdminSidebarProps) {
   }
 
   const primaryItems = getPrimaryMenuItems(restaurantSlug)
+  const isKitchenView = !!restaurantSlug && pathname.startsWith(`/${restaurantSlug}/kitchen`)
 
   const secondaryItems = restaurantSlug
-    ? [
+    ? isKitchenView 
+      ? [] // No secondary items in kitchen to stay focused
+      : [
         {
           title: 'Back To Platform',
           url: '/admin',
@@ -132,7 +154,7 @@ export function AdminSidebar({ restaurantSlug }: AdminSidebarProps) {
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">
-              {restaurantSlug ? 'Cashier Console' : 'Platform Admin'}
+              {isKitchenView ? 'Kitchen Console' : restaurantSlug ? 'Cashier Console' : 'Platform Admin'}
             </p>
             <p className="truncate text-xs text-sidebar-foreground/70">
               {restaurantSlug ? restaurantSlug : 'Operations Center'}
@@ -142,7 +164,9 @@ export function AdminSidebar({ restaurantSlug }: AdminSidebarProps) {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>{restaurantSlug ? 'Cashier Navigation' : 'Platform Navigation'}</SidebarGroupLabel>
+          <SidebarGroupLabel>
+            {isKitchenView ? 'Kitchen Navigation' : restaurantSlug ? 'Cashier Navigation' : 'Platform Navigation'}
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {primaryItems.map((item) => (

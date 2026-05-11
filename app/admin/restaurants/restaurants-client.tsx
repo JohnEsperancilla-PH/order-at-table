@@ -85,6 +85,9 @@ export function RestaurantsClient({
     description: '',
     contactNumber: '',
     openingHours: '',
+    latitude: '',
+    longitude: '',
+    geofenceRadius: '150',
   })
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -125,6 +128,9 @@ export function RestaurantsClient({
         description: formData.description.trim() || undefined,
         contact_number: formData.contactNumber.trim() || undefined,
         opening_hours: formData.openingHours.trim() || undefined,
+        latitude: formData.latitude ? Number(formData.latitude) : undefined,
+        longitude: formData.longitude ? Number(formData.longitude) : undefined,
+        geofence_radius_meters: formData.geofenceRadius ? Number(formData.geofenceRadius) : undefined,
       })
 
       setRestaurants((prev) => [newRestaurant, ...prev])
@@ -136,6 +142,9 @@ export function RestaurantsClient({
         description: '',
         contactNumber: '',
         openingHours: '',
+        latitude: '',
+        longitude: '',
+        geofenceRadius: '150',
       })
 
       setTimeout(() => {
@@ -493,6 +502,55 @@ export function RestaurantsClient({
                 />
               </div>
             </div>
+
+            <div className="rounded-lg bg-muted/30 p-3 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Geofencing (Vicinity Ordering)</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="latitude" className="text-xs">Latitude</Label>
+                  <Input
+                    id="latitude"
+                    name="latitude"
+                    type="number"
+                    step="0.00000001"
+                    placeholder="e.g. 10.7202"
+                    value={formData.latitude}
+                    onChange={handleInputChange}
+                    disabled={isSubmitting}
+                    className="h-9 text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="longitude" className="text-xs">Longitude</Label>
+                  <Input
+                    id="longitude"
+                    name="longitude"
+                    type="number"
+                    step="0.00000001"
+                    placeholder="e.g. 122.9463"
+                    value={formData.longitude}
+                    onChange={handleInputChange}
+                    disabled={isSubmitting}
+                    className="h-9 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="geofenceRadius" className="text-xs">Radius (meters)</Label>
+                <Input
+                  id="geofenceRadius"
+                  name="geofenceRadius"
+                  type="number"
+                  placeholder="150"
+                  value={formData.geofenceRadius}
+                  onChange={handleInputChange}
+                  disabled={isSubmitting}
+                  className="h-9 text-sm"
+                />
+                <p className="text-[10px] text-muted-foreground">Customers must be within this distance to order.</p>
+              </div>
+            </div>
+
             <div className="flex gap-3 pt-2">
               <Button
                 variant="outline"

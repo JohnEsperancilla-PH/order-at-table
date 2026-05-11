@@ -14,5 +14,5 @@ export default async function CashierSettingsPage({
     notFound()
   }
 
-  return <SettingsClient restaurantSlug={restaurantSlug} />
+  return <SettingsClient restaurant={restaurant} restaurantSlug={restaurantSlug} />
 }

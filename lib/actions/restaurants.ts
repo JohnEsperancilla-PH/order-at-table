@@ -67,6 +67,10 @@ export async function createRestaurant(
     description?: string | null
     contact_number?: string | null
     opening_hours?: string | null
+    latitude?: number | null
+    longitude?: number | null
+    geofence_radius_meters?: number | null
+    geofence_enabled?: boolean
   }
 ) {
   const supabase = createServiceClient()
@@ -80,6 +84,10 @@ export async function createRestaurant(
       description: options?.description || null,
       contact_number: options?.contact_number || null,
       opening_hours: options?.opening_hours || null,
+      latitude: options?.latitude || null,
+      longitude: options?.longitude || null,
+      geofence_radius_meters: options?.geofence_radius_meters || 100,
+      geofence_enabled: options?.geofence_enabled || false,
       is_open: true,
     })
     .select()
@@ -109,6 +117,10 @@ export async function updateRestaurant(
     tax_rate?: number
     tax_mode?: 'inclusive' | 'exclusive'
     kitchen_cutoff_time?: string | null
+    latitude?: number | null
+    longitude?: number | null
+    geofence_radius_meters?: number | null
+    geofence_enabled?: boolean
   }
 ) {
   const supabase = createServiceClient()
