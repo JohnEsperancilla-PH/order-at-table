@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
-import { ShoppingCart, Minus, CheckCircle2, X, RefreshCw, Plus, ShoppingBag, Trash2, MapPin, Navigation, AlertTriangle, ShieldAlert, AlertCircle, ArrowLeft } from 'lucide-react'
+import { ShoppingCart, Minus, CheckCircle2, X, RefreshCw, Plus, ShoppingBag, Trash2 } from 'lucide-react'
 import { createOrder, getOrderById, getActiveOrderForSession } from '@/lib/actions/orders'
 import { CartItem, MenuItem, MenuCategory, Order } from '@/lib/types'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -19,7 +19,6 @@ import { useRouter } from 'next/navigation'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { formatCurrency } from '@/lib/utils'
 import { MenuAccordion } from './menu-accordion'
-import { useGeofence } from '@/hooks/use-geofence'
 
 interface OrderPageClientProps {
   table: any
@@ -51,19 +50,6 @@ export function OrderPageClient({
   restaurantSlug,
 }: OrderPageClientProps) {
   const router = useRouter()
-  const restaurant = table?.restaurants
-  const geofencingEnabled = !!(restaurant?.geofence_enabled && restaurant?.latitude && restaurant?.longitude)
-  
-  const { 
-    status: geofenceStatus, 
-    retry: retryGeofence,
-    distance 
-  } = useGeofence({
-    restaurantLat: restaurant?.latitude ? Number(restaurant.latitude) : null,
-    restaurantLon: restaurant?.longitude ? Number(restaurant.longitude) : null,
-    radiusMeters: restaurant?.geofence_radius_meters || 150,
-    enabled: geofencingEnabled
-  })
 
   const [cart, setCart] = useState<CartItem[]>([])
   const [customerName, setCustomerName] = useState<string | null>(null)
@@ -78,82 +64,6 @@ export function OrderPageClient({
   const [addedMessage, setAddedMessage] = useState<string | null>(null)
   const [isCartOpen, setIsCartOpen] = useState(false)
   const isMobile = useIsMobile()
-
-  // Handle Geofence Blocking
-  if (geofencingEnabled && !orderPlaced) {
-    if (geofenceStatus === 'loading') {
-      return (
-        <div className="min-h-[100dvh] flex flex-col items-center justify-center p-6 bg-background text-center">
-          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-            <Navigation className="w-8 h-8 text-primary animate-pulse" />
-          </div>
-          <h2 className="text-xl font-bold mb-2">Verifying Location</h2>
-          <p className="text-center text-muted-foreground max-w-xs">
-            We're making sure you're at the restaurant to keep your orders secure.
-          </p>
-        </div>
-      )
-    }
-
-    if (geofenceStatus === 'out_of_range' || geofenceStatus === 'denied' || geofenceStatus === 'error' || geofenceStatus === 'unsupported') {
-      return (
-        <div className="min-h-[100dvh] flex flex-col items-center justify-center p-6 bg-background text-center">
-          <div className="max-w-md w-full space-y-6 text-center">
-            <div className="relative mx-auto w-24 h-24">
-              <div className="absolute inset-0 bg-red-100 dark:bg-red-950/30 rounded-full animate-ping opacity-25" />
-              <div className="relative flex items-center justify-center w-24 h-24 rounded-full bg-red-50 dark:bg-red-950/50 border-2 border-red-100 dark:border-red-900">
-                {geofenceStatus === 'denied' ? (
-                  <ShieldAlert className="w-12 h-12 text-red-600 dark:text-red-500" />
-                ) : (
-                  <MapPin className="w-12 h-12 text-red-600 dark:text-red-500" />
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <h1 className="text-2xl font-bold tracking-tight">
-                {geofenceStatus === 'out_of_range' 
-                  ? "You're a bit too far away" 
-                  : geofenceStatus === 'denied'
-                    ? "Location Access Required"
-                    : "Something went wrong"}
-              </h1>
-              <p className="text-muted-foreground leading-relaxed">
-                {geofenceStatus === 'out_of_range'
-                  ? `To place an order at ${restaurant?.name || 'this restaurant'}, you need to be within ${restaurant?.geofence_radius_meters || 150} meters. (Currently: ${distance ? Math.round(distance) : '?'}m away)`
-                  : geofenceStatus === 'denied'
-                    ? "We need your location to confirm you're physically at the restaurant. Please enable location permissions in your browser settings and try again."
-                    : "We couldn't verify your location. Please check your internet connection and try again."}
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-3 pt-4">
-              <Button onClick={() => retryGeofence()} size="lg" className="w-full h-12 rounded-xl text-base font-semibold">
-                <RefreshCw className="w-5 h-5 mr-2" />
-                Try Again
-              </Button>
-              
-              <Button asChild variant="outline" size="lg" className="w-full h-12 rounded-xl text-base">
-                <Link href={`/${restaurantSlug}/table/${table.table_number}`}>
-                  <ArrowLeft className="w-5 h-5 mr-2" />
-                  Back to Welcome
-                </Link>
-              </Button>
-            </div>
-
-            <div className="pt-8 border-t border-dashed">
-              <div className="flex items-center justify-center gap-2 text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/20 p-4 rounded-xl border border-amber-100 dark:border-amber-900/30">
-                <AlertCircle className="w-5 h-5 shrink-0" />
-                <p className="text-xs font-medium text-left">
-                  Staff Tip: If you're having trouble, make sure your GPS is on or try refreshing the page.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )
-    }
-  }
 
   // Auto-refresh order status if there's an active order
   useEffect(() => {
