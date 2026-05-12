@@ -36,7 +36,8 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
     try {
       const sessionId = typeof crypto !== 'undefined' && (crypto as any).randomUUID ? (crypto as any).randomUUID() : Math.random().toString(36).slice(2)
       const key = `order_session_${tableId}`
-      localStorage.setItem(key, JSON.stringify({ id: sessionId, name: name.trim() }))
+      const expiresAt = Date.now() + 30 * 60 * 1000 // 30 minutes
+      localStorage.setItem(key, JSON.stringify({ id: sessionId, name: name.trim(), expiresAt }))
       router.push(`/${restaurantSlug}/table/${tableNumber}/order`)
     } catch (err) {
       setError('Unable to start order. Try again.')
@@ -51,7 +52,7 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
       {/* Hero header — matches table landing page */}
       <div className="relative overflow-hidden">
         <div
-          className="h-[clamp(70px,15dvh,130px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+          className="h-[clamp(110px,22dvh,180px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
           style={restaurantCoverImage ? {
             backgroundImage: `url(${restaurantCoverImage})`,
             backgroundSize: 'cover',

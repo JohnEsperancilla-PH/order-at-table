@@ -1,19 +1,18 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
-import { ShoppingCart, Minus, CheckCircle2, X, RefreshCw, Plus, ShoppingBag, Trash2 } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { ShoppingCart, Minus, CheckCircle2, X, RefreshCw, Plus, ShoppingBag, Trash2, Tag } from 'lucide-react'
 import { createOrder, getOrderById, getActiveOrderForSession } from '@/lib/actions/orders'
 import { CartItem, MenuItem, MenuCategory, Order } from '@/lib/types'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -50,11 +49,11 @@ export function OrderPageClient({
   restaurantSlug,
 }: OrderPageClientProps) {
   const router = useRouter()
+  const restaurant = table?.restaurants
 
   const [cart, setCart] = useState<CartItem[]>([])
   const [customerName, setCustomerName] = useState<string | null>(null)
   const [customerSessionId, setCustomerSessionId] = useState<string | null>(null)
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [discountCode, setDiscountCode] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [pendingSubmissionKey, setPendingSubmissionKey] = useState<string | null>(null)
@@ -64,6 +63,8 @@ export function OrderPageClient({
   const [addedMessage, setAddedMessage] = useState<string | null>(null)
   const [isCartOpen, setIsCartOpen] = useState(false)
   const isMobile = useIsMobile()
+
+  const SESSION_TTL_MS = 30 * 60 * 1000 // 30 minutes
 
   // Auto-refresh order status if there's an active order
   useEffect(() => {
@@ -81,30 +82,41 @@ export function OrderPageClient({
       } finally {
         setIsRefreshing(false)
       }
-    }, 5000) // Refresh every 5 seconds
+    }, 5000)
 
     return () => clearInterval(interval)
   }, [orderPlaced?.id])
 
-  // Load (or resume) session for this table from localStorage
+  // Load or resume session — uses expiration instead of beforeunload wipe
   useEffect(() => {
     if (!table?.id) return
     try {
       const key = `order_session_${table.id}`
       const stored = typeof window !== 'undefined' ? localStorage.getItem(key) : null
       if (!stored) {
-        // No session found — redirect to table landing page
         router.replace(`/${restaurantSlug}/table/${table.table_number}`)
         return
       }
       const parsed = JSON.parse(stored)
       if (!parsed?.id || !parsed?.name) {
-        // Invalid session — redirect to table landing page
         router.replace(`/${restaurantSlug}/table/${table.table_number}`)
         return
       }
+
+      // Check expiration
+      if (parsed.expiresAt && Date.now() > parsed.expiresAt) {
+        localStorage.removeItem(key)
+        router.replace(`/${restaurantSlug}/table/${table.table_number}`)
+        return
+      }
+
       setCustomerSessionId(parsed.id)
       if (parsed.name) setCustomerName(parsed.name)
+
+      // Bump expiration
+      parsed.expiresAt = Date.now() + SESSION_TTL_MS
+      localStorage.setItem(key, JSON.stringify(parsed))
+
       ;(async () => {
         try {
           const sessionOrder = await getActiveOrderForSession(table.id, parsed.id)
@@ -114,21 +126,9 @@ export function OrderPageClient({
         }
       })()
     } catch (err) {
-      // Invalid JSON in localStorage — redirect
       router.replace(`/${restaurantSlug}/table/${table.table_number}`)
     }
   }, [table?.id, router, table?.table_number])
-
-  // Clear session when the page/tab is closed
-  useEffect(() => {
-    if (!table?.id) return
-    const key = `order_session_${table.id}`
-    const handleBeforeUnload = () => {
-      localStorage.removeItem(key)
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [table?.id])
 
   const filteredItems = useMemo(() => menuItems, [menuItems])
 
@@ -193,6 +193,11 @@ export function OrderPageClient({
 
     const modText = mod ? ` (${mod.name})` : ''
     setAddedMessage(`${item.name}${modText} added to cart`)
+
+    // Haptic feedback on mobile
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate(15)
+    }
   }
 
   const removeFromCart = (lineId: string) => {
@@ -229,14 +234,7 @@ export function OrderPageClient({
 
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0)
 
-  const handleOpenConfirm = () => {
-    if (isMobile) {
-      setIsCartOpen(false)
-    }
-    setShowConfirmDialog(true)
-  }
-
-  const handleConfirmOrder = async () => {
+  const handlePlaceOrder = async () => {
     if (cart.length === 0) {
       setError('Your cart is empty')
       return
@@ -250,14 +248,12 @@ export function OrderPageClient({
     }
 
     try {
-      // Ensure customer name/session exists
       if (!customerName || !customerName.trim()) {
         setError('Please enter your name before placing the order')
         setIsSubmitting(false)
         return
       }
 
-      // Create or persist a session id for this customer on this table
       let sessionId = customerSessionId
       if (!sessionId) {
         sessionId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
@@ -266,7 +262,11 @@ export function OrderPageClient({
         setCustomerSessionId(sessionId)
         try {
           const key = `order_session_${table.id}`
-          localStorage.setItem(key, JSON.stringify({ id: sessionId, name: customerName }))
+          localStorage.setItem(key, JSON.stringify({
+            id: sessionId,
+            name: customerName,
+            expiresAt: Date.now() + SESSION_TTL_MS,
+          }))
         } catch (e) {
           // ignore localStorage errors
         }
@@ -294,7 +294,7 @@ export function OrderPageClient({
       setCart([])
       setDiscountCode('')
       setPendingSubmissionKey(null)
-      setShowConfirmDialog(false)
+      setIsCartOpen(false)
       router.replace(`/${restaurantSlug}/table/${table.table_number}/orders/${order.id}/${order.status}`)
     } catch (err: any) {
       setError(err.message || 'Failed to place order')
@@ -308,9 +308,9 @@ export function OrderPageClient({
       <OrderConfirmationView
         order={orderPlaced}
         isRefreshing={isRefreshing}
-        restaurantName={table.restaurants?.name}
+        restaurantName={restaurant?.name}
         tableNumber={table.table_number}
-        coverImageUrl={table.restaurants?.cover_image_url}
+        coverImageUrl={restaurant?.cover_image_url}
         restaurantSlug={restaurantSlug}
         onStartNewOrder={() => setOrderPlaced(null)}
         onClose={() => {
@@ -322,7 +322,7 @@ export function OrderPageClient({
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:flex md:items-center md:justify-center md:px-6 md:py-8 md:pb-8">
-      <div className="mx-auto max-w-md space-y-5 p-4 sm:p-5 md:h-[840px] md:w-[28rem] md:max-h-[calc(100dvh-4rem)] md:overflow-hidden md:rounded-[28px] md:border md:bg-background md:shadow-2xl md:flex md:flex-col">
+      <div className="mx-auto max-w-md space-y-4 p-4 sm:p-5 md:h-[840px] md:w-[28rem] md:max-h-[calc(100dvh-4rem)] md:overflow-hidden md:rounded-[28px] md:border md:bg-background md:shadow-2xl md:flex md:flex-col">
         <div className="space-y-1">
           <div className="flex w-full shrink-0 items-center justify-center px-1 py-0.5 leading-tight">
             <Link
@@ -332,26 +332,27 @@ export function OrderPageClient({
               Learn More about QRder - Public Beta 1.0
             </Link>
           </div>
-          {/* Hero with restaurant info overlay - mobile-optimized aspect ratio */}
+
+          {/* Hero — taller ratio for prominence */}
           <div className="relative overflow-hidden rounded-2xl ring-1 ring-black/5 dark:ring-white/10">
-          <div
-              className="h-[clamp(70px,15dvh,130px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
-            style={table.restaurants?.cover_image_url ? {
-              backgroundImage: `url(${table.restaurants.cover_image_url})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-            } : undefined}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-          <div className="absolute bottom-0 left-0 right-0 p-4 pb-5 text-white">
-            <h1 className="text-xl font-bold tracking-tight drop-shadow-md sm:text-2xl">
-              {table.restaurants?.name || 'Sample Restaurant'}
-            </h1>
-            <p className="text-white/80 text-sm mt-1">
-              Table {table.table_number}
-            </p>
+            <div
+              className="h-[clamp(110px,22dvh,180px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+              style={restaurant?.cover_image_url ? {
+                backgroundImage: `url(${restaurant.cover_image_url})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              } : undefined}
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 p-4 pb-5 text-white">
+              <h1 className="text-xl font-bold tracking-tight drop-shadow-md sm:text-2xl">
+                {restaurant?.name || 'Sample Restaurant'}
+              </h1>
+              <p className="text-white/80 text-sm mt-1">
+                Table {table.table_number}
+              </p>
+            </div>
           </div>
-        </div>
         </div>
 
         {customerName && (
@@ -362,9 +363,8 @@ export function OrderPageClient({
           </div>
         )}
 
-        {/* Single column layout for all screen sizes */}
+        {/* Scrollable menu */}
         <div className="guest-overscroll-contain space-y-4 md:flex-1 md:min-h-0 md:overflow-y-auto md:pr-1">
-          {/* Menu Items by Category - Mobile-optimized */}
           <MenuAccordion
             categories={categories}
             menuItems={filteredItems}
@@ -374,12 +374,14 @@ export function OrderPageClient({
           />
         </div>
 
+        {/* Desktop cart toast */}
         {addedMessage != null && !isCartOpen ? (
           <div className="hidden shrink-0 md:block">
             <CartToastBubble message={addedMessage} />
           </div>
         ) : null}
 
+        {/* Desktop View Cart button */}
         <div className="hidden border-t border-border/60 pt-3 md:block">
           <Button
             className="h-12 w-full rounded-xl text-base shadow-lg touch-manipulation motion-safe:transition-transform motion-safe:active:scale-[0.99]"
@@ -401,7 +403,7 @@ export function OrderPageClient({
         </div>
       </div>
 
-      {/* Fixed cart bar + stacked “added” toast directly above View Cart (mobile) */}
+      {/* Mobile fixed cart bar */}
       <div className="pointer-events-none fixed bottom-0 left-1/2 z-40 flex w-full max-w-md -translate-x-1/2 flex-col gap-2 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-2 md:hidden">
         {addedMessage != null && !isCartOpen ? (
           <div className="pointer-events-auto">
@@ -428,237 +430,162 @@ export function OrderPageClient({
           </Button>
         </div>
       </div>
-          <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
-            <SheetContent
-              side="bottom"
-              className="flex max-h-[min(92dvh,calc(100dvh-env(safe-area-inset-bottom,0px)))] min-h-0 flex-col gap-0 overflow-hidden rounded-t-2xl p-0 pb-0 pt-2 max-w-md md:bottom-[calc(50%-420px+0.75rem)] md:left-1/2 md:max-h-[min(560px,calc(100dvh-3rem))] md:w-[calc(28rem-1.5rem)] md:max-w-[calc(28rem-1.5rem)] md:-translate-x-1/2 md:rounded-2xl md:border md:p-0 md:shadow-2xl md:pt-2"
-            >
-              <SheetHeader className="shrink-0 gap-1.5 border-b border-border/50 px-4 pb-3 pr-14 pt-2 text-left md:px-5">
-                <SheetTitle className="flex items-center gap-2 text-lg font-bold tracking-tight">
-                  <span>Your Cart</span>
-                  <Badge variant="secondary" className="h-6 min-w-6 px-1.5 text-xs font-semibold tabular-nums">
-                    {cartItemCount}
-                  </Badge>
-                </SheetTitle>
-                <SheetDescription className="text-sm leading-snug text-foreground/70">
-                  Review your items before placing the order.
-                </SheetDescription>
-              </SheetHeader>
 
-              {cart.length === 0 ? (
-                <div className="flex flex-1 flex-col items-center justify-center px-4 py-12 sm:px-5">
-                  <ShoppingBag className="h-12 w-12 text-muted-foreground/40" />
-                  <p className="mt-3 text-sm text-muted-foreground">Your cart is empty</p>
+      {/* Cart Sheet — single-step checkout with discount inline */}
+      <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
+        <SheetContent
+          side="bottom"
+          className="flex max-h-[min(92dvh,calc(100dvh-env(safe-area-inset-bottom,0px)))] min-h-0 flex-col gap-0 overflow-hidden rounded-t-2xl p-0 pb-0 pt-2 max-w-md md:bottom-[calc(50%-420px+0.75rem)] md:left-1/2 md:max-h-[min(600px,calc(100dvh-3rem))] md:w-[calc(28rem-1.5rem)] md:max-w-[calc(28rem-1.5rem)] md:-translate-x-1/2 md:rounded-2xl md:border md:p-0 md:shadow-2xl md:pt-2"
+        >
+          <SheetHeader className="shrink-0 gap-1.5 border-b border-border/50 px-4 pb-3 pr-14 pt-2 text-left md:px-5">
+            <SheetTitle className="flex items-center gap-2 text-lg font-bold tracking-tight">
+              <span>Your Cart</span>
+              <Badge variant="secondary" className="h-6 min-w-6 px-1.5 text-xs font-semibold tabular-nums">
+                {cartItemCount}
+              </Badge>
+            </SheetTitle>
+            <SheetDescription className="text-sm leading-snug text-foreground/70">
+              Review your items and place your order.
+            </SheetDescription>
+          </SheetHeader>
+
+          {cart.length === 0 ? (
+            <div className="flex flex-col items-center justify-center px-4 py-16 sm:px-5">
+              <ShoppingBag className="h-12 w-12 text-muted-foreground/40" />
+              <p className="mt-3 text-sm text-muted-foreground">Your cart is empty</p>
+            </div>
+          ) : (
+            <>
+              {error && (
+                <div className="shrink-0 px-4 pt-2 sm:px-5">
+                  <Alert variant="destructive" className="py-2">
+                    <AlertDescription className="text-xs">{error}</AlertDescription>
+                  </Alert>
                 </div>
-              ) : (
-                <>
-                  <div className="guest-overscroll-contain min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-4 py-3 sm:px-5">
-                    <div className="space-y-2">
-                      {cart.map(item => {
-                        const itemPrice = lineUnitPrice(item)
-                        const lineTotal = itemPrice * item.quantity
-
-                        return (
-                          <div key={item.lineId} className="space-y-2.5 rounded-xl border border-border/60 p-3.5">
-                            <div className="flex items-start gap-2.5">
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold leading-snug">{item.menu_item.name}</p>
-                                {item.modifier && (
-                                  <p className="mt-0.5 text-sm font-medium text-primary">{item.modifier.name}</p>
-                                )}
-                                <p className="mt-1 text-xs leading-snug text-foreground/80 sm:text-[13px]">
-                                  <span className="tabular-nums text-muted-foreground">
-                                    {formatCurrency(itemPrice)} × {item.quantity}
-                                  </span>
-                                  <span className="mx-1.5 text-muted-foreground">=</span>
-                                  <span className="font-semibold tabular-nums text-foreground">
-                                    {formatCurrency(lineTotal)}
-                                  </span>
-                                </p>
-                              </div>
-                              <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
-                                <Button
-                                  size="icon"
-                                  variant="outline"
-                                  className="h-10 w-10 touch-manipulation rounded-full sm:h-9 sm:w-9"
-                                  aria-label={`Decrease quantity for ${item.menu_item.name}`}
-                                  onClick={() => updateQuantity(item.lineId, item.quantity - 1)}
-                                >
-                                  <Minus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                </Button>
-                                <span className="min-w-[1.5rem] text-center text-sm font-bold tabular-nums">
-                                  {item.quantity}
-                                </span>
-                                <Button
-                                  size="icon"
-                                  variant="outline"
-                                  className="h-10 w-10 touch-manipulation rounded-full sm:h-9 sm:w-9"
-                                  aria-label={`Increase quantity for ${item.menu_item.name}`}
-                                  onClick={() => updateQuantity(item.lineId, item.quantity + 1)}
-                                >
-                                  <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-10 w-10 touch-manipulation text-muted-foreground hover:text-destructive sm:h-9 sm:w-9"
-                                  aria-label={`Remove ${item.menu_item.name} from cart`}
-                                  onClick={() => removeFromCart(item.lineId)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                            <div>
-                              <Label className="text-xs font-medium text-foreground/90 sm:text-sm">
-                                Allergies &amp; special requests
-                              </Label>
-                              <Textarea
-                                value={item.special_instructions ?? ''}
-                                onChange={e => setLineSpecialInstructions(item.lineId, e.target.value)}
-                                placeholder="Optional — e.g. nut allergy, no dairy, cooking preference"
-                                className="mt-1.5 min-h-[68px] resize-none text-sm leading-normal placeholder:text-muted-foreground/70"
-                              />
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="shrink-0 space-y-3 border-t border-border/60 bg-background px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-3 sm:px-5">
-                    {addedMessage != null && isCartOpen ? (
-                      <CartToastBubble message={addedMessage} />
-                    ) : null}
-                    <Separator className="bg-border/70" />
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between text-sm text-foreground/80">
-                        <span>
-                          {cartItemCount} {cartItemCount === 1 ? 'item' : 'items'}
-                        </span>
-                        <span className="tabular-nums font-medium">{formatCurrency(subtotal)}</span>
-                      </div>
-                      <div className="flex justify-between text-lg font-bold">
-                        <span>Total</span>
-                        <span>{formatCurrency(subtotal)}</span>
-                      </div>
-                    </div>
-                    <Button
-                      className="h-11 w-full touch-manipulation rounded-xl text-sm font-semibold motion-safe:transition-transform motion-safe:active:scale-[0.99] sm:h-12 sm:text-base"
-                      size="lg"
-                      onClick={handleOpenConfirm}
-                      disabled={cart.length === 0 || isSubmitting}
-                    >
-                      Confirm Order &middot; {formatCurrency(subtotal)}
-                    </Button>
-                  </div>
-                </>
               )}
-            </SheetContent>
-          </Sheet>
 
-      {/* Confirm Order Dialog */}
-      <Dialog
-        open={showConfirmDialog}
-        onOpenChange={(open) => {
-          if (isSubmitting) return
-          setShowConfirmDialog(open)
-          if (open) setError(null)
-        }}
-      >
-        <DialogContent className="max-w-md px-6 sm:px-8 md:w-[calc(28rem-1.5rem)] md:max-w-[calc(28rem-1.5rem)]">
-          <DialogHeader>
-            <DialogTitle className="text-lg">Confirm Your Order</DialogTitle>
-            <DialogDescription className="text-sm">
-              Review your order and apply a discount code if you have one.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+              <div className="guest-overscroll-contain min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-4 py-3 sm:px-5">
+                <div className="space-y-2">
+                  {cart.map(item => {
+                    const itemPrice = lineUnitPrice(item)
+                    const lineTotal = itemPrice * item.quantity
 
-            {/* Order summary */}
-            <div className="rounded-xl border bg-muted/30 divide-y max-h-44 overflow-y-auto">
-              {cart.map(item => {
-                const price = lineUnitPrice(item)
-                return (
-                  <div key={item.lineId} className="flex justify-between items-start gap-2 px-4 py-2.5 text-sm">
-                    <div className="flex-1 min-w-0">
-                      <span className="font-medium">{item.menu_item.name}</span>
-                      {item.modifier && (
-                        <span className="text-muted-foreground text-xs ml-1">({item.modifier.name})</span>
-                      )}
-                      <span className="text-muted-foreground ml-1">&times;{item.quantity}</span>
-                      {item.special_instructions && (
-                        <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 leading-snug">
-                          Note: {item.special_instructions}
-                        </p>
-                      )}
-                    </div>
-                    <span className="font-medium tabular-nums shrink-0">
-                      {formatCurrency(price * item.quantity)}
+                    return (
+                      <div key={item.lineId} className="space-y-2.5 rounded-xl border border-border/60 p-3.5">
+                        <div className="flex items-start gap-2.5">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold leading-snug">{item.menu_item.name}</p>
+                            {item.modifier && (
+                              <p className="mt-0.5 text-sm font-medium text-primary">{item.modifier.name}</p>
+                            )}
+                            <p className="mt-1 text-xs leading-snug text-foreground/80 sm:text-[13px]">
+                              <span className="tabular-nums text-muted-foreground">
+                                {formatCurrency(itemPrice)} × {item.quantity}
+                              </span>
+                              <span className="mx-1.5 text-muted-foreground">=</span>
+                              <span className="font-semibold tabular-nums text-foreground">
+                                {formatCurrency(lineTotal)}
+                              </span>
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="h-10 w-10 touch-manipulation rounded-full sm:h-9 sm:w-9"
+                              aria-label={`Decrease quantity for ${item.menu_item.name}`}
+                              onClick={() => updateQuantity(item.lineId, item.quantity - 1)}
+                            >
+                              <Minus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            </Button>
+                            <span className="min-w-[1.5rem] text-center text-sm font-bold tabular-nums">
+                              {item.quantity}
+                            </span>
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="h-10 w-10 touch-manipulation rounded-full sm:h-9 sm:w-9"
+                              aria-label={`Increase quantity for ${item.menu_item.name}`}
+                              onClick={() => updateQuantity(item.lineId, item.quantity + 1)}
+                            >
+                              <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-10 w-10 touch-manipulation text-muted-foreground hover:text-destructive sm:h-9 sm:w-9"
+                              aria-label={`Remove ${item.menu_item.name} from cart`}
+                              onClick={() => removeFromCart(item.lineId)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-foreground/90 sm:text-sm">
+                            Allergies &amp; special requests
+                          </Label>
+                          <Textarea
+                            value={item.special_instructions ?? ''}
+                            onChange={e => setLineSpecialInstructions(item.lineId, e.target.value)}
+                            placeholder="Optional — e.g. nut allergy, no dairy, cooking preference"
+                            className="mt-1.5 min-h-[68px] resize-none text-sm leading-normal placeholder:text-muted-foreground/70"
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Footer — discount + total + place order */}
+              <div className="shrink-0 space-y-3 border-t border-border/60 bg-background px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-3 sm:px-5">
+                {addedMessage != null && isCartOpen ? (
+                  <CartToastBubble message={addedMessage} />
+                ) : null}
+
+                {/* Discount code inline */}
+                <div className="relative">
+                  <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    value={discountCode}
+                    onChange={e => {
+                      setDiscountCode(e.target.value.toUpperCase())
+                      if (error) setError(null)
+                    }}
+                    autoCapitalize="characters"
+                    autoComplete="off"
+                    placeholder="Discount code (optional)"
+                    className="h-10 pl-9 text-sm"
+                  />
+                </div>
+
+                <Separator className="bg-border/70" />
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-sm text-foreground/80">
+                    <span>
+                      {cartItemCount} {cartItemCount === 1 ? 'item' : 'items'}
                     </span>
+                    <span className="tabular-nums font-medium">{formatCurrency(subtotal)}</span>
                   </div>
-                )
-              })}
-            </div>
-
-            <div>
-              <Label htmlFor="customer-name" className="text-sm">Your Name</Label>
-              <Input
-                id="customer-name"
-                value={customerName ?? ''}
-                onChange={e => setCustomerName(e.target.value)}
-                placeholder="e.g., Alice"
-                className="mt-1.5 h-11"
-              />
-
-              <div className="mt-3">
-                <Label htmlFor="discount-code" className="text-sm">Discount Code (Optional)</Label>
-                <Input
-                  id="discount-code"
-                  value={discountCode}
-                  onChange={e => setDiscountCode(e.target.value.toUpperCase())}
-                  autoCapitalize="characters"
-                  autoComplete="off"
-                  placeholder="Enter code"
-                  className="mt-1.5 h-11"
-                />
+                  <div className="flex justify-between text-lg font-bold">
+                    <span>Total</span>
+                    <span>{formatCurrency(subtotal)}</span>
+                  </div>
+                </div>
+                <Button
+                  className="h-11 w-full touch-manipulation rounded-xl text-sm font-semibold motion-safe:transition-transform motion-safe:active:scale-[0.99] sm:h-12 sm:text-base"
+                  size="lg"
+                  onClick={handlePlaceOrder}
+                  disabled={cart.length === 0 || isSubmitting}
+                >
+                  {isSubmitting ? 'Placing Order...' : `Place Order · ${formatCurrency(subtotal)}`}
+                </Button>
               </div>
-            </div>
-            <Separator />
-            <div className="space-y-1">
-              <div className="flex justify-between text-sm text-muted-foreground">
-                <span>{cartItemCount} {cartItemCount === 1 ? 'item' : 'items'}</span>
-                <span>{formatCurrency(subtotal)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-lg">
-                <span>Total</span>
-                <span>{formatCurrency(subtotal)}</span>
-              </div>
-            </div>
-            <div className="flex gap-3 pt-1">
-              <Button
-                variant="outline"
-                onClick={() => setShowConfirmDialog(false)}
-                className="flex-1 rounded-xl h-11"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleConfirmOrder}
-                disabled={isSubmitting || cart.length === 0}
-                className="flex-1 h-11 touch-manipulation rounded-xl motion-safe:transition-transform motion-safe:active:scale-[0.98]"
-              >
-                {isSubmitting ? 'Placing Order...' : `Place Order · ${formatCurrency(subtotal)}`}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
@@ -696,14 +623,14 @@ export function OrderConfirmationView({
   return (
     <div className="min-h-[100dvh] bg-gradient-to-b from-background to-muted/20 pb-6 md:px-6 md:py-8">
       <div className="max-w-md mx-auto space-y-4 p-4 md:max-w-[28rem] md:overflow-hidden md:rounded-[28px] md:border md:bg-background md:shadow-2xl">
-        {/* Compact hero - mobile optimized */}
+        {/* Hero — taller ratio */}
         <div className="relative overflow-hidden rounded-xl">
           <div
-            className="h-[clamp(70px,15dvh,130px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
-            style={coverImageUrl ? { 
-              backgroundImage: `url(${coverImageUrl})`, 
-              backgroundSize: 'cover', 
-              backgroundPosition: 'center' 
+            className="h-[clamp(110px,22dvh,180px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+            style={coverImageUrl ? {
+              backgroundImage: `url(${coverImageUrl})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center'
             } : undefined}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
@@ -727,9 +654,9 @@ export function OrderConfirmationView({
                 {isReady ? 'Your food is ready!' : 'Order Placed!'}
               </h2>
               <p className="text-sm text-muted-foreground leading-snug">
-                {isReady 
-                  ? "Our staff is bringing your order to your table now." 
-                  : isConfirmed 
+                {isReady
+                  ? "Our staff is bringing your order to your table now."
+                  : isConfirmed
                     ? "Your payment is confirmed. We're on it!"
                     : "Show this code at the cashier to complete your payment."
                 }
@@ -760,16 +687,16 @@ export function OrderConfirmationView({
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground">Order Status</p>
               <div className="flex items-center justify-center gap-3 flex-wrap">
-                <Badge 
-                  variant={isCompleted ? 'default' : isReady ? 'secondary' : 'outline'} 
+                <Badge
+                  variant={isCompleted ? 'default' : isReady ? 'secondary' : 'outline'}
                   className={`text-sm px-3 py-1.5 ${isReady ? 'bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800' : ''}`}
                 >
                   {statusText}
                 </Badge>
                 {!isCompleted && (
                   <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
-                    <RefreshCw 
-                      className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} 
+                    <RefreshCw
+                      className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`}
                     />
                     <span>Live updates</span>
                   </div>
@@ -801,4 +728,3 @@ export function OrderConfirmationView({
     </div>
   )
 }
-

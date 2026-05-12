@@ -127,8 +127,14 @@
   }
 }
 
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @layer utilities {
-  /* Guest shell: reduce scroll chaining on nested scroll areas (mobile). */
   .guest-overscroll-contain {
     overscroll-behavior-y: contain;
   }

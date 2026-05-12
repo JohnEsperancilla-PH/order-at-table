@@ -5,12 +5,13 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import Image from 'next/image'
-import { Plus, Minus, Check, ShoppingBag } from 'lucide-react'
+import { Plus, Minus, Check, ShoppingBag, Search } from 'lucide-react'
 import { CartItem, MenuCategory, MenuItem } from '@/lib/types'
 import { cn, formatCurrency } from '@/lib/utils'
 
@@ -23,7 +24,6 @@ function isSupabasePublicMenuImage(src: string) {
   return Boolean(base && src.startsWith(`${base}/storage/v1/object/public/`))
 }
 
-/** Uses `next/image` when URL is your Supabase public bucket (smaller downloads on slow networks). */
 function MenuItemPhoto({
   src,
   alt,
@@ -37,26 +37,36 @@ function MenuItemPhoto({
   className?: string
   priority?: boolean
 }) {
+  const [loaded, setLoaded] = useState(false)
+
   if (isSupabasePublicMenuImage(src)) {
     return (
-      <Image
-        src={src}
-        alt={alt}
-        fill
-        sizes={sizes}
-        className={cn('object-cover', className)}
-        loading={priority ? undefined : 'lazy'}
-        priority={priority}
-      />
+      <>
+        {!loaded && <div className="absolute inset-0 bg-muted animate-pulse rounded-inherit" />}
+        <Image
+          src={src}
+          alt={alt}
+          fill
+          sizes={sizes}
+          className={cn('object-cover transition-opacity duration-300', loaded ? 'opacity-100' : 'opacity-0', className)}
+          loading={priority ? undefined : 'lazy'}
+          priority={priority}
+          onLoad={() => setLoaded(true)}
+        />
+      </>
     )
   }
   return (
-    <img
-      src={src}
-      alt={alt}
-      className={cn('h-full w-full object-cover', className)}
-      loading={priority ? 'eager' : 'lazy'}
-    />
+    <>
+      {!loaded && <div className="absolute inset-0 bg-muted animate-pulse" />}
+      <img
+        src={src}
+        alt={alt}
+        className={cn('h-full w-full object-cover transition-opacity duration-300', loaded ? 'opacity-100' : 'opacity-0', className)}
+        loading={priority ? 'eager' : 'lazy'}
+        onLoad={() => setLoaded(true)}
+      />
+    </>
   )
 }
 
@@ -70,6 +80,7 @@ interface MenuAccordionProps {
 
 export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpdateQuantity }: MenuAccordionProps) {
   const [openCategory, setOpenCategory] = useState<string | undefined>(categories[0]?.id)
+  const [searchQuery, setSearchQuery] = useState('')
   const [detailItem, setDetailItem] = useState<any | null>(null)
   const [selectedItem, setSelectedItem] = useState<any | null>(null)
   const [selectedModifierId, setSelectedModifierId] = useState<string | null>(null)
@@ -102,34 +113,47 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
 
   const calculatePriceRange = (item: any) => {
     const modifiers = item.modifiers || []
-
     if (modifiers.length === 0) {
       return formatCurrency(item.price)
     }
-
     const basePriceWithModifiers = [
       item.price,
       ...modifiers.map((m: any) => item.price + m.price_modifier),
     ]
-
     const minPrice = Math.min(...basePriceWithModifiers)
     const maxPrice = Math.max(...basePriceWithModifiers)
-
     if (minPrice === maxPrice) {
       return formatCurrency(minPrice)
     }
-
     return `${formatCurrency(minPrice)} – ${formatCurrency(maxPrice)}`
   }
 
+  const itemsByCategory = useMemo(() => {
+    const grouped = new Map<string, any[]>()
+    categories.forEach(category => {
+      grouped.set(category.id, [])
+    })
+    menuItems.forEach(item => {
+      if (!grouped.has(item.category_id)) {
+        grouped.set(item.category_id, [])
+      }
+      grouped.get(item.category_id)?.push(item)
+    })
+    return grouped
+  }, [categories, menuItems])
+
+  const searchedItems = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) return null
+    return menuItems.filter(item => item.name.toLowerCase().includes(query))
+  }, [searchQuery, menuItems])
+
   const handleAddToCart = (item: any) => {
     const modifiers = item.modifiers || []
-
     if (modifiers.length === 0) {
       onAddToCart(item, null, null)
       return
     }
-
     setSelectedItem(item)
     setSelectedModifierId(null)
     setModifierSheetNotes('')
@@ -153,8 +177,6 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
     setIsModifierSheetOpen(true)
   }
 
-  const itemHasDescription = (item: any) => Boolean(item?.description?.trim())
-
   const handleLearnMore = (item: any, event: MouseEvent) => {
     event.preventDefault()
     event.stopPropagation()
@@ -163,26 +185,10 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
 
   const getModifierPriceDisplay = (item: any, modifierId: string | null) => {
     if (!modifierId || !item.modifiers) return formatCurrency(item.price)
-
     const mod = item.modifiers.find((m: any) => m.id === modifierId)
     if (!mod) return formatCurrency(item.price)
-
     return formatCurrency(item.price + mod.price_modifier)
   }
-
-  const itemsByCategory = useMemo(() => {
-    const grouped = new Map<string, MenuItem[]>()
-    categories.forEach(category => {
-      grouped.set(category.id, [])
-    })
-    menuItems.forEach(item => {
-      if (!grouped.has(item.category_id)) {
-        grouped.set(item.category_id, [])
-      }
-      grouped.get(item.category_id)?.push(item)
-    })
-    return grouped
-  }, [categories, menuItems])
 
   if (categories.length === 0) {
     return (
@@ -194,180 +200,209 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
     )
   }
 
+  const renderItemCard = (item: any) => {
+    const inCartQty = getCartQuantityForItem(item.id)
+    const modifiers = item.modifiers || []
+    const hasModifiers = modifiers.length > 0
+    const plainLines = linesForItemWithoutModifier(item.id)
+    const singlePlainLine = plainLines.length === 1 ? plainLines[0] : null
+    const showQuantityStepper = !hasModifiers && !!singlePlainLine
+
+    return (
+      <Card
+        key={item.id}
+        className={cn(
+          'touch-manipulation overflow-hidden border-border/70 shadow-sm !gap-0 !p-0',
+          'motion-safe:transition-[box-shadow,border-color,opacity,transform]',
+          'motion-safe:duration-200 motion-safe:ease-out',
+          'hover:border-primary/25 hover:shadow-md',
+          'motion-safe:active:scale-[0.997] active:opacity-[0.98]',
+          item.is_available ? '' : 'opacity-55 grayscale-[0.35]',
+        )}
+      >
+        <div className="flex items-stretch gap-3 p-3">
+          {item.image_url && (
+            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-muted sm:h-[5.25rem] sm:w-[5.25rem]">
+              <MenuItemPhoto
+                src={item.image_url}
+                alt={item.name}
+                sizes="(max-width: 640px) 80px, 84px"
+              />
+              {inCartQty > 0 && (
+                <div
+                  className="absolute right-1.5 top-1.5 z-[2] flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-bold tabular-nums text-primary-foreground shadow-md ring-2 ring-background"
+                  aria-label={`${inCartQty} in cart`}
+                >
+                  {inCartQty}
+                </div>
+              )}
+              {!item.is_available && (
+                <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
+                  <span className="text-xs font-medium">Sold Out</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div
+            className={cn(
+              'flex min-w-0 flex-1 flex-col',
+              item.image_url && 'min-h-[5rem] sm:min-h-[5.25rem]',
+            )}
+          >
+            <div className="min-w-0 flex-1 space-y-1">
+              <h4 className="line-clamp-2 text-[15px] font-semibold leading-snug tracking-tight sm:text-base">
+                {item.name}
+              </h4>
+              {item.description?.trim() && (
+                <p className="line-clamp-2 text-sm leading-snug text-muted-foreground sm:text-[15px]">
+                  {item.description.trim()}
+                </p>
+              )}
+              {item.description?.trim() && (
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto min-h-8 justify-start px-0 py-0 text-xs font-semibold underline-offset-4 sm:min-h-7 sm:text-sm"
+                  onClick={e => handleLearnMore(item, e)}
+                >
+                  Learn more
+                </Button>
+              )}
+            </div>
+
+            <div className="mt-auto flex flex-col gap-1.5 pt-3">
+              {!item.image_url && inCartQty > 0 && (
+                <span className="text-right text-xs text-muted-foreground">
+                  {inCartQty} in cart
+                </span>
+              )}
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <span className="min-w-0 flex-1 text-sm font-bold tabular-nums text-primary sm:text-[15px]">
+                  {calculatePriceRange(item)}
+                </span>
+                {showQuantityStepper && inCartQty > 0 ? (
+                  <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-10 w-10 rounded-full touch-manipulation sm:h-8 sm:w-8"
+                      onClick={() =>
+                        singlePlainLine &&
+                        onUpdateQuantity(singlePlainLine.lineId, singlePlainLine.quantity - 1)
+                      }
+                    >
+                      <Minus className="w-4 h-4 sm:h-3 sm:w-3" />
+                    </Button>
+                    <span className="min-w-[1.5rem] text-center text-xs font-semibold tabular-nums">
+                      {inCartQty}
+                    </span>
+                    <Button
+                      size="icon"
+                      variant="default"
+                      className="h-10 w-10 rounded-full touch-manipulation sm:h-8 sm:w-8"
+                      onClick={() => onAddToCart(item, null, null)}
+                    >
+                      <Plus className="w-4 h-4 sm:h-3 sm:w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="h-9 min-h-10 shrink-0 touch-manipulation rounded-full px-3 text-[13px] font-semibold motion-safe:transition-transform motion-safe:active:scale-[0.98] sm:h-10 sm:px-4 sm:text-sm"
+                    onClick={() => handleAddToCart(item)}
+                    disabled={!item.is_available}
+                    aria-label={
+                      hasModifiers
+                        ? `Choose options for ${item.name}`
+                        : `Add ${item.name} to cart`
+                    }
+                  >
+                    {hasModifiers ? (
+                      <span className="whitespace-nowrap text-xs sm:text-sm">Choose options</span>
+                    ) : (
+                      <>
+                        <Plus className="mr-1 h-3.5 w-3.5 sm:mr-1.5 sm:h-4 sm:w-4" />
+                        Add
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+    )
+  }
+
   return (
     <>
-      <Accordion
-        type="single"
-        collapsible
-        value={openCategory}
-        onValueChange={setOpenCategory}
-        className="w-full"
-      >
-        {categories.map(category => {
-          const items = itemsByCategory.get(category.id) || []
+      {/* Search bar */}
+      <div className="relative sticky top-0 z-10 pb-3 bg-background/95 backdrop-blur-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Search menu..."
+          className="h-10 pl-9 text-sm rounded-xl border-border/70"
+        />
+      </div>
 
-          return (
-            <AccordionItem key={category.id} value={category.id}>
-              <AccordionTrigger className="px-1 py-3.5 md:py-4 [&>svg]:mt-0.5">
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                  <span className="truncate">{category.name}</span>
-                  <Badge variant="secondary" className="shrink-0 tabular-nums text-[11px]">
-                    {items.length}
-                  </Badge>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent>
-                {items.length === 0 ? (
-                  <Card>
-                    <CardContent className="py-6 text-center text-muted-foreground">
-                      No items in this category.
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="grid grid-cols-1 gap-2 pb-1 md:gap-2.5">
-                    {items.map(item => {
-                      const inCartQty = getCartQuantityForItem(item.id)
-                      const modifiers = item.modifiers || []
-                      const hasModifiers = modifiers.length > 0
-                      const plainLines = linesForItemWithoutModifier(item.id)
-                      const singlePlainLine = plainLines.length === 1 ? plainLines[0] : null
-                      const showQuantityStepper = !hasModifiers && !!singlePlainLine
+      {/* Search results or accordion */}
+      {searchQuery.trim() ? (
+        <div className="grid grid-cols-1 gap-2 pb-1 md:gap-2.5">
+          {searchedItems && searchedItems.length > 0 ? (
+            searchedItems.map(renderItemCard)
+          ) : (
+            <Card>
+              <CardContent className="py-10 text-center text-muted-foreground">
+                No items match "{searchQuery}"
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      ) : (
+        <Accordion
+          type="single"
+          collapsible
+          value={openCategory}
+          onValueChange={setOpenCategory}
+          className="w-full"
+        >
+          {categories.map(category => {
+            const items = itemsByCategory.get(category.id) || []
 
-                      return (
-                        <Card
-                          key={item.id}
-                          className={cn(
-                            'touch-manipulation overflow-hidden border-border/70 shadow-sm !gap-0 !p-0',
-                            'motion-safe:transition-[box-shadow,border-color,opacity,transform]',
-                            'motion-safe:duration-200 motion-safe:ease-out',
-                            'hover:border-primary/25 hover:shadow-md',
-                            'motion-safe:active:scale-[0.997] active:opacity-[0.98]',
-                            item.is_available ? '' : 'opacity-55 grayscale-[0.35]',
-                          )}
-                        >
-                          <div className="flex items-stretch gap-3 p-3">
-                            {item.image_url && (
-                              <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-muted sm:h-[5.25rem] sm:w-[5.25rem]">
-                                <MenuItemPhoto
-                                  src={item.image_url}
-                                  alt={item.name}
-                                  sizes="(max-width: 640px) 80px, 84px"
-                                />
-                                {inCartQty > 0 && (
-                                  <div
-                                    className="absolute right-1.5 top-1.5 z-[2] flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-bold tabular-nums text-primary-foreground shadow-md ring-2 ring-background"
-                                    aria-label={`${inCartQty} in cart`}
-                                  >
-                                    {inCartQty}
-                                  </div>
-                                )}
-                                {!item.is_available && (
-                                  <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
-                                    <span className="text-xs font-medium">Sold Out</span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            <div
-                              className={cn(
-                                'flex min-w-0 flex-1 flex-col',
-                                item.image_url && 'min-h-[5rem] sm:min-h-[5.25rem]',
-                              )}
-                            >
-                              <div className="min-w-0 flex-1 space-y-1">
-                                <h4 className="line-clamp-2 text-[15px] font-semibold leading-snug tracking-tight sm:text-base">
-                                  {item.name}
-                                </h4>
-                                {item.description?.trim() && (
-                                  <p className="line-clamp-2 text-sm leading-snug text-muted-foreground sm:text-[15px]">
-                                    {item.description.trim()}
-                                  </p>
-                                )}
-                                {itemHasDescription(item) && (
-                                  <Button
-                                    type="button"
-                                    variant="link"
-                                    className="h-auto min-h-8 justify-start px-0 py-0 text-xs font-semibold underline-offset-4 sm:min-h-7 sm:text-sm"
-                                    onClick={e => handleLearnMore(item, e)}
-                                  >
-                                    Learn more
-                                  </Button>
-                                )}
-                              </div>
-
-                              <div className="mt-auto flex flex-col gap-1.5 pt-3">
-                                {!item.image_url && inCartQty > 0 && (
-                                  <span className="text-right text-xs text-muted-foreground">
-                                    {inCartQty} in cart
-                                  </span>
-                                )}
-                                <div className="flex min-w-0 items-center justify-between gap-3">
-                                  <span className="min-w-0 flex-1 text-sm font-bold tabular-nums text-primary sm:text-[15px]">
-                                    {calculatePriceRange(item)}
-                                  </span>
-                                  {showQuantityStepper && inCartQty > 0 ? (
-                                    <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
-                                      <Button
-                                        size="icon"
-                                        variant="outline"
-                                        className="h-10 w-10 rounded-full touch-manipulation sm:h-8 sm:w-8"
-                                        onClick={() =>
-                                          singlePlainLine &&
-                                          onUpdateQuantity(singlePlainLine.lineId, singlePlainLine.quantity - 1)
-                                        }
-                                      >
-                                        <Minus className="w-4 h-4 sm:h-3 sm:w-3" />
-                                      </Button>
-                                      <span className="min-w-[1.5rem] text-center text-xs font-semibold tabular-nums">
-                                        {inCartQty}
-                                      </span>
-                                      <Button
-                                        size="icon"
-                                        variant="default"
-                                        className="h-10 w-10 rounded-full touch-manipulation sm:h-8 sm:w-8"
-                                        onClick={() => onAddToCart(item, null, null)}
-                                      >
-                                        <Plus className="w-4 h-4 sm:h-3 sm:w-3" />
-                                      </Button>
-                                    </div>
-                                  ) : (
-                                    <Button
-                                      size="sm"
-                                      className="h-9 min-h-10 shrink-0 touch-manipulation rounded-full px-3 text-[13px] font-semibold motion-safe:transition-transform motion-safe:active:scale-[0.98] sm:h-10 sm:px-4 sm:text-sm"
-                                      onClick={() => handleAddToCart(item)}
-                                      disabled={!item.is_available}
-                                      aria-label={
-                                        hasModifiers
-                                          ? `Choose options for ${item.name}`
-                                          : `Add ${item.name} to cart`
-                                      }
-                                    >
-                                      {hasModifiers ? (
-                                        <span className="whitespace-nowrap text-xs sm:text-sm">Choose options</span>
-                                      ) : (
-                                        <>
-                                          <Plus className="mr-1 h-3.5 w-3.5 sm:mr-1.5 sm:h-4 sm:w-4" />
-                                          Add
-                                        </>
-                                      )}
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </Card>
-                      )
-                    })}
+            return (
+              <AccordionItem key={category.id} value={category.id}>
+                <AccordionTrigger className="px-1 py-3.5 md:py-4 [&>svg]:mt-0.5">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="truncate">{category.name}</span>
+                    <Badge variant="secondary" className="shrink-0 tabular-nums text-[11px]">
+                      {items.length}
+                    </Badge>
                   </div>
-                )}
-              </AccordionContent>
-            </AccordionItem>
-          )
-        })}
-      </Accordion>
+                </AccordionTrigger>
+                <AccordionContent>
+                  {items.length === 0 ? (
+                    <Card>
+                      <CardContent className="py-6 text-center text-muted-foreground">
+                        No items in this category.
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-2 pb-1 md:gap-2.5">
+                      {items.map(renderItemCard)}
+                    </div>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+            )
+          })}
+        </Accordion>
+      )}
 
+      {/* Detail Dialog */}
       <Dialog
         open={!!detailItem}
         onOpenChange={open => {
@@ -488,6 +523,7 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
         </DialogContent>
       </Dialog>
 
+      {/* Modifier Sheet */}
       <Sheet open={isModifierSheetOpen} onOpenChange={setIsModifierSheetOpen}>
         <SheetContent
           side="bottom"
