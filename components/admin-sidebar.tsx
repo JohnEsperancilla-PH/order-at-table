@@ -31,9 +31,10 @@ import {
 
 interface AdminSidebarProps {
   restaurantSlug?: string
+  kitchenEnabled?: boolean
 }
 
-export function AdminSidebar({ restaurantSlug }: AdminSidebarProps) {
+export function AdminSidebar({ restaurantSlug, kitchenEnabled = false }: AdminSidebarProps) {
   const pathname = usePathname()
 
   const isActivePath = (url: string) => {
@@ -60,7 +61,7 @@ export function AdminSidebar({ restaurantSlug }: AdminSidebarProps) {
       }
 
       // Restaurant cashier navigation
-      return [
+      const items = [
         {
           title: 'Dashboard',
           url: `/${slug}/cashier/dashboard`,
@@ -71,11 +72,15 @@ export function AdminSidebar({ restaurantSlug }: AdminSidebarProps) {
           url: `/${slug}/cashier`,
           icon: LayoutDashboard,
         },
-        {
-          title: 'Kitchen',
-          url: `/${slug}/kitchen`,
-          icon: LayoutGrid,
-        },
+        ...(kitchenEnabled
+          ? [
+              {
+                title: 'Kitchen',
+                url: `/${slug}/kitchen`,
+                icon: LayoutGrid,
+              },
+            ]
+          : []),
         {
           title: 'Tables',
           url: `/${slug}/cashier/tables`,
@@ -102,6 +107,7 @@ export function AdminSidebar({ restaurantSlug }: AdminSidebarProps) {
           icon: SlidersHorizontal,
         },
       ]
+      return items
     } else {
       // Platform admin navigation
       return [

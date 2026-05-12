@@ -14,9 +14,10 @@ import { Moon, ShieldCheck, Store, Sun } from 'lucide-react'
 interface AdminLayoutProps {
   children: React.ReactNode
   restaurantSlug?: string
+  kitchenEnabled?: boolean
 }
 
-export function AdminLayout({ children, restaurantSlug }: AdminLayoutProps) {
+export function AdminLayout({ children, restaurantSlug, kitchenEnabled = false }: AdminLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
@@ -72,7 +73,7 @@ export function AdminLayout({ children, restaurantSlug }: AdminLayoutProps) {
 
   return (
     <SidebarProvider>
-      <AdminSidebar restaurantSlug={restaurantSlug} />
+      <AdminSidebar restaurantSlug={restaurantSlug} kitchenEnabled={kitchenEnabled} />
       <SidebarInset>
         <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70">
           <SidebarTrigger className="-ml-1" />
@@ -112,4 +113,3 @@ export function AdminLayout({ children, restaurantSlug }: AdminLayoutProps) {
     </SidebarProvider>
   )
 }
-

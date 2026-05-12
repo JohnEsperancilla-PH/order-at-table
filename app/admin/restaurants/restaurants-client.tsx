@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   AlertDialog,
@@ -35,8 +36,9 @@ import {
   LayoutGrid,
   List,
   Trash2,
+  Crown,
 } from 'lucide-react'
-import { createRestaurant, deleteRestaurant } from '@/lib/actions/restaurants'
+import { createRestaurant, deleteRestaurant, toggleRestaurantFeature } from '@/lib/actions/restaurants'
 import { format } from 'date-fns'
 import {
   Select,
@@ -54,6 +56,7 @@ interface Restaurant {
   is_open: boolean
   opening_hours: string | null
   contact_number: string | null
+  subscription_features: Record<string, boolean> | null
   created_at: string
   updated_at: string
 }
@@ -79,6 +82,7 @@ export function RestaurantsClient({
   const [restaurantToDelete, setRestaurantToDelete] = useState<Restaurant | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [featureLoading, setFeatureLoading] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -93,6 +97,32 @@ export function RestaurantsClient({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleToggleFeature = async (restaurantId: string, feature: string, enabled: boolean) => {
+    const key = `${restaurantId}:${feature}`
+    setFeatureLoading(key)
+    try {
+      await toggleRestaurantFeature(restaurantId, feature, enabled)
+      setRestaurants((prev) =>
+        prev.map((r) =>
+          r.id === restaurantId
+            ? {
+                ...r,
+                subscription_features: {
+                  ...(r.subscription_features || {}),
+                  [feature]: enabled,
+                },
+              }
+            : r
+        )
+      )
+      router.refresh()
+    } catch {
+      // revert on error — state stays in sync via re-render
+    } finally {
+      setFeatureLoading(null)
+    }
   }
 
   const filteredRestaurants = useMemo(() => {
@@ -304,6 +334,12 @@ export function RestaurantsClient({
                     <Badge variant={restaurant.is_open ? 'default' : 'secondary'}>
                       {restaurant.is_open ? 'Open' : 'Closed'}
                     </Badge>
+                    {restaurant.subscription_features?.kitchen === true && (
+                      <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-700 dark:text-amber-400">
+                        <Crown className="h-3 w-3" />
+                        Kitchen
+                      </Badge>
+                    )}
                   </div>
                   <p className="mt-0.5 font-mono text-xs text-muted-foreground">{restaurant.slug}</p>
                   {restaurant.description && (
@@ -311,7 +347,19 @@ export function RestaurantsClient({
                       {restaurant.description}
                     </p>
                   )}
-                  <p className="mt-1 text-xs text-muted-foreground/80">
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="flex items-center gap-2 rounded-lg border px-3 py-1.5">
+                      <Switch
+                        checked={restaurant.subscription_features?.kitchen === true}
+                        disabled={featureLoading === `${restaurant.id}:kitchen`}
+                        onCheckedChange={(checked) =>
+                          handleToggleFeature(restaurant.id, 'kitchen', checked)
+                        }
+                      />
+                      <Label className="cursor-pointer text-xs">Kitchen Display</Label>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground/80">
                     Created {format(new Date(restaurant.created_at), 'MMM d, yyyy')}
                   </p>
                 </div>
@@ -363,13 +411,13 @@ export function RestaurantsClient({
               className="flex flex-col transition-all hover:-translate-y-0.5 hover:shadow-md"
             >
               <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <CardTitle className="line-clamp-2 text-base">{restaurant.name}</CardTitle>
-                      <CardDescription className="mt-1 font-mono text-xs">
-                        {restaurant.slug}
-                      </CardDescription>
-                    </div>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="line-clamp-2 text-base">{restaurant.name}</CardTitle>
+                    <CardDescription className="mt-1 font-mono text-xs">
+                      {restaurant.slug}
+                    </CardDescription>
+                  </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <Badge variant={restaurant.is_open ? 'default' : 'secondary'}>
                       {restaurant.is_open ? 'Open' : 'Closed'}
@@ -400,6 +448,24 @@ export function RestaurantsClient({
                   {restaurant.contact_number && <div>Contact: {restaurant.contact_number}</div>}
                   {restaurant.opening_hours && <div>Hours: {restaurant.opening_hours}</div>}
                 </div>
+                <Separator />
+                <div className="rounded-lg border px-3 py-2.5 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Subscription Features</p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Crown className="h-3.5 w-3.5 text-amber-500" />
+                      <Label htmlFor={`kitchen-${restaurant.id}`} className="cursor-pointer text-xs">Kitchen Display</Label>
+                    </div>
+                    <Switch
+                      id={`kitchen-${restaurant.id}`}
+                      checked={restaurant.subscription_features?.kitchen === true}
+                      disabled={featureLoading === `${restaurant.id}:kitchen`}
+                      onCheckedChange={(checked) =>
+                        handleToggleFeature(restaurant.id, 'kitchen', checked)
+                      }
+                    />
+                  </div>
+                </div>
                 <Separator className="my-1" />
                 <div className="mt-auto flex flex-wrap gap-2">
                   <Button asChild variant="outline" size="sm" className="flex-1 gap-1.5">
@@ -429,7 +495,7 @@ export function RestaurantsClient({
                 </p>
               </CardContent>
             </Card>
-          ))}
+          ),)}
         </div>
       )}
 
@@ -500,54 +566,6 @@ export function RestaurantsClient({
                   onChange={handleInputChange}
                   disabled={isSubmitting}
                 />
-              </div>
-            </div>
-
-            <div className="rounded-lg bg-muted/30 p-3 space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Geofencing (Vicinity Ordering)</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="latitude" className="text-xs">Latitude</Label>
-                  <Input
-                    id="latitude"
-                    name="latitude"
-                    type="number"
-                    step="0.00000001"
-                    placeholder="e.g. 10.7202"
-                    value={formData.latitude}
-                    onChange={handleInputChange}
-                    disabled={isSubmitting}
-                    className="h-9 text-sm"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="longitude" className="text-xs">Longitude</Label>
-                  <Input
-                    id="longitude"
-                    name="longitude"
-                    type="number"
-                    step="0.00000001"
-                    placeholder="e.g. 122.9463"
-                    value={formData.longitude}
-                    onChange={handleInputChange}
-                    disabled={isSubmitting}
-                    className="h-9 text-sm"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="geofenceRadius" className="text-xs">Radius (meters)</Label>
-                <Input
-                  id="geofenceRadius"
-                  name="geofenceRadius"
-                  type="number"
-                  placeholder="150"
-                  value={formData.geofenceRadius}
-                  onChange={handleInputChange}
-                  disabled={isSubmitting}
-                  className="h-9 text-sm"
-                />
-                <p className="text-[10px] text-muted-foreground">Customers must be within this distance to order.</p>
               </div>
             </div>
 

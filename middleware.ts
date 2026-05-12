@@ -99,6 +99,24 @@ export async function middleware(request: NextRequest) {
         redirectUrl.searchParams.set('redirectedFrom', request.nextUrl.pathname)
         return NextResponse.redirect(redirectUrl)
       }
+
+      // Gate kitchen routes behind subscription feature
+      if (subRoute === 'kitchen') {
+        const { data: restaurantFeatures } = await supabase
+          .from('restaurants')
+          .select('subscription_features')
+          .eq('slug', restaurantSlug.toLowerCase())
+          .single()
+
+        const hasKitchen =
+          restaurantFeatures?.subscription_features?.kitchen === true
+
+        if (!hasKitchen) {
+          const redirectUrl = request.nextUrl.clone()
+          redirectUrl.pathname = `/${restaurantSlug}/cashier`
+          return NextResponse.redirect(redirectUrl)
+        }
+      }
     }
     // If service role key is not configured, fall back to cookie presence only
     // (legacy behavior - add SUPABASE_SERVICE_ROLE_KEY for full validation)

@@ -192,3 +192,41 @@ export async function deleteRestaurant(restaurantId: string) {
 
   return { ok: true as const }
 }
+
+export async function toggleRestaurantFeature(
+  restaurantId: string,
+  feature: string,
+  enabled: boolean
+) {
+  const supabase = createServiceClient()
+
+  const { data: current, error: fetchError } = await supabase
+    .from('restaurants')
+    .select('subscription_features')
+    .eq('id', restaurantId)
+    .single()
+
+  if (fetchError) {
+    throw new Error(`Failed to fetch restaurant: ${fetchError.message}`)
+  }
+
+  const features = { ...(current?.subscription_features || {}) }
+  features[feature] = enabled
+
+  const { data, error } = await supabase
+    .from('restaurants')
+    .update({ subscription_features: features })
+    .eq('id', restaurantId)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to update feature: ${error.message}`)
+  }
+
+  revalidatePath('/admin')
+  revalidatePath('/admin/restaurants')
+  revalidatePath(`/${data.slug}`, 'layout')
+
+  return data
+}

@@ -12,3 +12,11 @@ export function formatCurrency(amount: number, currency = "PHP", locale = "en-PH
     minimumFractionDigits: 2,
   }).format(amount)
 }
+
+export function hasFeature(
+  restaurant: { subscription_features?: Record<string, boolean> | null } | null,
+  feature: string
+): boolean {
+  if (!restaurant?.subscription_features) return false
+  return restaurant.subscription_features[feature] === true
+}

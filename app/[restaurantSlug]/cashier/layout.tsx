@@ -1,4 +1,5 @@
 import { AdminLayout } from '@/components/admin-layout'
+import { getRestaurantBySlug } from '@/lib/actions/restaurants'
 
 export default async function Layout({
   children,
@@ -8,6 +9,12 @@ export default async function Layout({
   params: Promise<{ restaurantSlug: string }>
 }) {
   const { restaurantSlug } = await params
-  return <AdminLayout restaurantSlug={restaurantSlug}>{children}</AdminLayout>
-}
+  const restaurant = await getRestaurantBySlug(restaurantSlug)
+  const kitchenEnabled = restaurant?.subscription_features?.kitchen === true
 
+  return (
+    <AdminLayout restaurantSlug={restaurantSlug} kitchenEnabled={kitchenEnabled}>
+      {children}
+    </AdminLayout>
+  )
+}

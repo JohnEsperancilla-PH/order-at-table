@@ -23,6 +23,7 @@ export interface Restaurant {
   longitude: number | null
   geofence_radius_meters: number | null
   geofence_enabled: boolean
+  subscription_features: Record<string, boolean> | null
   created_at: string
   updated_at: string
 }
@@ -146,4 +147,3 @@ export interface CartItem {
   modifier?: MenuItemModifier | null
   special_instructions?: string | null
 }
-
