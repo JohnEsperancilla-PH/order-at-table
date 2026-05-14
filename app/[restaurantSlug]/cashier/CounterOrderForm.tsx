@@ -11,7 +11,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Minus, Plus, Trash2, Search, ShoppingCart, User, Hash } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import { Minus, Plus, Trash2, Search, ShoppingCart, User, Hash, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react'
 import { createOrder } from '@/lib/actions/orders'
 import type { CartItem } from '@/lib/types'
 import { formatCurrency } from '@/lib/utils'
@@ -34,6 +35,7 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [sizePickerItem, setSizePickerItem] = useState<any | null>(null)
+  const [expandedNotes, setExpandedNotes] = useState(new Set())
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Group menu items by category
@@ -115,6 +117,10 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
     })
   }, [])
 
+  const setItemNotes = useCallback((lineId: string, notes: string) => {
+    setCart(prev => prev.map(ci => ci.lineId === lineId ? { ...ci, special_instructions: notes.trim() || undefined } : ci))
+  }, [])
+
   const removeFromCart = useCallback((lineId: string) => {
     setCart(prev => prev.filter(ci => ci.lineId !== lineId))
   }, [])
@@ -178,6 +184,7 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
         quantity: item.quantity,
         price: getItemPrice(item),
         modifier_id: item.modifier_id || undefined,
+        special_instructions: item.special_instructions?.trim() || undefined,
       }))
 
       await createOrder(
@@ -199,6 +206,14 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const toggleNotes = (lineId: string) => {
+    setExpandedNotes(prev => {
+      var n = new Set(prev)
+      n.has(lineId) ? n.delete(lineId) : n.add(lineId)
+      return n
+    })
   }
 
   const handleOpenChange = (val: boolean) => {
@@ -361,14 +376,27 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
                           key={item.lineId}
                           className="flex items-start gap-2 p-2 rounded-md bg-muted/40 text-sm"
                         >
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm leading-tight truncate">{item.menu_item.name}</p>
-                            {item.modifier && (
-                              <p className="text-[11px] text-muted-foreground">{item.modifier.name}</p>
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            <div>
+                              <p className="font-medium text-sm leading-tight truncate">{item.menu_item.name}</p>
+                              {item.modifier && (
+                                <p className="text-[11px] text-muted-foreground">{item.modifier.name}</p>
+                              )}
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {formatCurrency(itemPrice)} ea
+                              </p>
+                            </div>
+                            <button type="button" onClick={() => toggleNotes(item.lineId)} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+                              <MessageSquare className="w-3 h-3" />
+                              {item.special_instructions ? ("Edit notes") : ("Allergies / cooking notes")}
+                              {expandedNotes.has(item.lineId) ? (<ChevronDown className="w-3 h-3 ml-0.5" />) : (<ChevronUp className="w-3 h-3 ml-0.5" />)}
+                            </button>
+                            {expandedNotes.has(item.lineId) && (
+                              <Textarea value={item.special_instructions || ""} onChange={function(e){return setItemNotes(item.lineId, e.target.value)}} placeholder="e.g. nut allergy, no dairy, well done..." className="min-h-[60px] text-xs resize-none" />
                             )}
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {formatCurrency(itemPrice)} ea
-                            </p>
+                            {!expandedNotes.has(item.lineId) && item.special_instructions && (
+                              <p className="text-[10px] text-warning-muted-foreground italic truncate">{item.special_instructions}</p>
+                            )}
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
                             <Button

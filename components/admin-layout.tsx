@@ -23,6 +23,15 @@ export function AdminLayout({ children, restaurantSlug, kitchenEnabled = false }
   const supabase = createClient()
   const [isDarkMode, setIsDarkMode] = useState(false)
   const isCashierView = !!restaurantSlug
+  const isManagerView = !!restaurantSlug && pathname.startsWith(`/${restaurantSlug}/manager`)
+
+  const getStaffRole = () => {
+    if (!restaurantSlug) return null
+    if (typeof document === 'undefined') return null
+    const match = document.cookie.match(new RegExp(`staff_role_${restaurantSlug}=([^;]+)`))
+    return match ? match[1] : null
+  }
+  const staffRole = getStaffRole()
 
   useEffect(() => {
     if (!isCashierView) return
@@ -53,7 +62,7 @@ export function AdminLayout({ children, restaurantSlug, kitchenEnabled = false }
 
   // Handle login page bypass
   const isLoginPage = restaurantSlug 
-    ? pathname === `/${restaurantSlug}/cashier/login`
+    ? (pathname === `/${restaurantSlug}/cashier/login` || pathname === `/${restaurantSlug}/manager/login`)
     : pathname === '/admin/login'
 
   if (isLoginPage) {
@@ -63,19 +72,23 @@ export function AdminLayout({ children, restaurantSlug, kitchenEnabled = false }
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     const redirectTo = restaurantSlug
-      ? `/${restaurantSlug}/cashier/login`
+      ? isManagerView ? `/${restaurantSlug}/manager/login` : `/${restaurantSlug}/cashier/login`
       : '/admin/login'
     router.replace(redirectTo)
   }
 
-  const homeLink = restaurantSlug ? `/${restaurantSlug}/cashier` : '/admin'
-  const heading = restaurantSlug ? `${restaurantSlug} Cashier` : 'Platform Admin'
+  const homeLink = restaurantSlug
+    ? isManagerView ? `/${restaurantSlug}/manager` : `/${restaurantSlug}/cashier`
+    : '/admin'
+  const heading = restaurantSlug
+    ? isManagerView ? `${restaurantSlug} Manager` : `${restaurantSlug} Cashier`
+    : 'Platform Admin'
 
   return (
     <SidebarProvider>
-      <AdminSidebar restaurantSlug={restaurantSlug} kitchenEnabled={kitchenEnabled} />
+      <AdminSidebar restaurantSlug={restaurantSlug} kitchenEnabled={kitchenEnabled} staffRole={staffRole} />
       <SidebarInset>
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-2 border-b bg-background/95 px-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/70">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
           <Link href={homeLink} className="text-sm font-semibold md:text-base">
@@ -84,7 +97,7 @@ export function AdminLayout({ children, restaurantSlug, kitchenEnabled = false }
           <div className="hidden md:flex">
             <Badge variant="outline" className="gap-1.5 font-normal">
               {restaurantSlug ? <Store className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-              {restaurantSlug ? 'Restaurant View' : 'Platform View'}
+              {restaurantSlug ? (isManagerView ? 'Manager View' : 'Restaurant View') : 'Platform View'}
             </Badge>
           </div>
           <div className="ml-auto flex items-center gap-2">

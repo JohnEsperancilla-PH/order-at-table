@@ -8,10 +8,14 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
-import { Search, CheckCircle2, XCircle, Clock, Package, Eye, RefreshCw, Inbox, Receipt, Filter } from 'lucide-react'
+import { Search, CheckCircle2, XCircle, Clock, Package, Eye, Inbox, Receipt, Filter, Loader2, RefreshCw } from 'lucide-react'
+import { LiveIndicator } from '@/components/ui/live-indicator'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { PageHeader } from '@/components/ui/page-header'
 import { updateOrderStatus, getAllOrdersByRestaurantSlug, getOrdersByStatusAndRestaurantSlug, bulkUpdateOrderStatus, resendReceipt } from '@/lib/actions/orders'
 import { Order, OrderStatus } from '@/lib/types'
 import { format } from 'date-fns'
@@ -51,6 +55,7 @@ const OrderCard = memo(function OrderCard({
   onDetails, 
   onConfirmPayment, 
   onUpdateStatus,
+  onCancelRequest,
   getStatusBadge
 }: { 
   order: CashierOrder, 
@@ -61,15 +66,16 @@ const OrderCard = memo(function OrderCard({
   onDetails: (order: CashierOrder) => void,
   onConfirmPayment: (order: CashierOrder) => void,
   onUpdateStatus: (id: string, status: OrderStatus) => void,
+  onCancelRequest: (id: string) => void,
   getStatusBadge: (status: OrderStatus) => React.ReactNode
 }) {
   return (
     <Card
       className={`overflow-hidden transition-all duration-200 hover:shadow-md ${
         order.status === 'awaiting_cashier_confirmation'
-          ? 'border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-amber-950/10'
+          ? 'border-warning/40 bg-warning-muted/20'
           : order.status === 'pending'
-            ? 'border-blue-200 dark:border-blue-800'
+            ? 'border-info/30'
             : ''
       }`}
     >
@@ -152,7 +158,7 @@ const OrderCard = memo(function OrderCard({
                 size="default"
                 variant="outline"
                 className="h-10 px-3 text-sm text-destructive hover:text-destructive"
-                onClick={() => onUpdateStatus(order.id, 'cancelled')}
+                onClick={() => onCancelRequest(order.id)}
               >
                 <XCircle className="w-3.5 h-3.5" />
               </Button>
@@ -171,7 +177,7 @@ const OrderCard = memo(function OrderCard({
           {order.status === 'ready_for_pickup' && (
             <Button
               size="default"
-              className="h-10 px-4 text-sm flex-1 bg-amber-600 hover:bg-amber-700"
+              className="h-10 px-4 text-sm flex-1 bg-warning text-warning-foreground hover:bg-warning/90"
               onClick={() => onUpdateStatus(order.id, 'completed')}
             >
               <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
@@ -212,9 +218,13 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
   const [cashReceived, setCashReceived] = useState('')
   const [paymentError, setPaymentError] = useState<string | null>(null)
   const [isConfirmingPayment, setIsConfirmingPayment] = useState(false)
+  const [cancelOrderId, setCancelOrderId] = useState<string | null>(null)
+  const [cancelBulkOrders, setCancelBulkOrders] = useState(false)
   
   const ordersRef = useRef(orders)
   ordersRef.current = orders
+  const selectedOrderRef = useRef(selectedOrder)
+  selectedOrderRef.current = selectedOrder
 
   const filteredOrders = useMemo(() => {
     return orders.filter(order => {
@@ -297,8 +307,9 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
       setLoadError(null)
 
       // Update selected order if it exists
-      if (selectedOrder) {
-        const updatedOrder = freshOrders.find((o) => o.id === selectedOrder.id)
+      const currentSelected = selectedOrderRef.current
+      if (currentSelected) {
+        const updatedOrder = freshOrders.find((o) => o.id === currentSelected.id)
         if (updatedOrder) {
           setSelectedOrder(updatedOrder)
         }
@@ -309,7 +320,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
       setIsLoading(false)
       setIsRefreshing(false)
     }
-  }, [restaurantSlug, selectedOrder])
+  }, [restaurantSlug])
 
   useEffect(() => {
     setIsMounted(true)
@@ -415,13 +426,13 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
     try {
       await updateOrderStatus(restaurantSlug, orderId, status as any)
       await loadOrders(activeTab)
-      if (selectedOrder?.id === orderId) {
+      if (selectedOrderRef.current?.id === orderId) {
         setSelectedOrder(null)
       }
     } catch (error: unknown) {
       setStatusUpdateError(error instanceof Error ? error.message : 'Failed to update order status')
     }
-  }, [restaurantSlug, activeTab, loadOrders, selectedOrder?.id])
+  }, [restaurantSlug, activeTab, loadOrders])
 
   const toggleOrderSelection = useCallback((orderId: string, checked: boolean) => {
     setSelectedOrderIds(prev => {
@@ -556,7 +567,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
     return (
       <Badge 
         variant={variants[status]} 
-        className={`flex items-center gap-1 ${status === 'ready_for_pickup' ? 'border-amber-500 text-amber-600 dark:text-amber-400' : ''}`}
+        className={`flex items-center gap-1 ${status === 'ready_for_pickup' ? 'border-warning/50 text-warning-muted-foreground' : ''}`}
       >
         <Icon className={`w-3 h-3 ${status === 'ready_for_pickup' ? 'animate-pulse' : ''}`} />
         {status.replace(/_/g, ' ').toUpperCase()}
@@ -567,16 +578,11 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
   if (!isMounted) {
     return (
       <div className="space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Orders</h1>
-            <p className="text-muted-foreground">Preparing cashier console...</p>
-          </div>
-        </div>
+        <PageHeader title="Orders" description="Preparing cashier console..." />
         <Card className="gap-2 py-3">
           <CardContent className="py-8">
             <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
-              <RefreshCw className="h-7 w-7 animate-spin text-muted-foreground/50" />
+              <Loader2 className="h-7 w-7 animate-spin text-muted-foreground/50" />
               <p className="text-sm">Loading interface...</p>
             </div>
           </CardContent>
@@ -587,13 +593,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
 
   return (
       <div className="space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Orders</h1>
-            <p className="text-muted-foreground">
-              Manage orders and verify confirmation codes
-            </p>
-          </div>
+        <PageHeader title="Orders" description="Manage orders and verify confirmation codes">
           <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
             <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground sm:justify-end">
               <Badge variant="outline" className="font-normal">In {incomingCount}</Badge>
@@ -610,16 +610,13 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
               </Button>
               {autoRefresh && (
                 <Badge variant="outline" className="gap-1.5 text-muted-foreground">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
-                  </span>
+                  <LiveIndicator color="success" />
                   Live
                 </Badge>
               )}
             </div>
           </div>
-        </div>
+        </PageHeader>
 
       {/* Orders Table */}
       <Card className="gap-2 py-3 sm:gap-2.5 sm:py-4">
@@ -799,7 +796,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                         size="sm"
                         variant="destructive"
                         className="h-8 text-xs sm:text-sm"
-                        onClick={() => handleBulkStatusUpdate('cancelled')}
+                        onClick={() => setCancelBulkOrders(true)}
                         disabled={selectedOrderIds.length === 0 || isBulkUpdating}
                       >
                         Cancel Selected
@@ -842,7 +839,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                 )}
                 {isLoading ? (
                   <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
-                    <RefreshCw className="h-7 w-7 animate-spin text-muted-foreground/50" />
+                    <Loader2 className="h-7 w-7 animate-spin text-muted-foreground/50" />
                     <p className="text-sm">Loading orders...</p>
                   </div>
                 ) : displayedOrders.length === 0 ? (
@@ -864,6 +861,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                           onDetails={setSelectedOrder}
                           onConfirmPayment={openPaymentDialog}
                           onUpdateStatus={handleUpdateStatus}
+                          onCancelRequest={setCancelOrderId}
                           getStatusBadge={getStatusBadge}
                         />
                       ))}
@@ -892,7 +890,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
             <div className="space-y-5">
               {/* Status + meta row */}
               <div className="flex items-center justify-between">
-                {getStatusBadge(selectedOrder.status)}
+                <StatusBadge status={selectedOrder.status as OrderStatus} />
                 <span className="text-xs text-muted-foreground">
                   {format(new Date(selectedOrder.created_at), 'PPpp')}
                 </span>
@@ -945,7 +943,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                           {item.quantity} &times; {formatCurrency(item.price)}
                         </p>
                         {item.special_instructions?.trim() && (
-                          <p className="text-xs text-amber-800 dark:text-amber-300 mt-1.5 leading-snug whitespace-pre-wrap">
+                          <p className="text-xs text-warning-muted-foreground mt-1.5 leading-snug whitespace-pre-wrap">
                             {item.special_instructions.trim()}
                           </p>
                         )}
@@ -966,7 +964,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                   <span className="tabular-nums">{formatCurrency(selectedOrder.subtotal)}</span>
                 </div>
                 {selectedOrder.discount_amount > 0 && (
-                  <div className="flex justify-between text-sm text-green-600">
+                  <div className="flex justify-between text-sm text-success">
                     <span>Discount</span>
                     <span className="tabular-nums">-{formatCurrency(selectedOrder.discount_amount)}</span>
                   </div>
@@ -1075,6 +1073,56 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
         menuItems={menuItems}
         onOrderCreated={() => loadOrders(activeTab === 'incoming' ? undefined : activeTab)}
       />
+
+      {/* Cancel single order confirmation */}
+      <AlertDialog open={!!cancelOrderId} onOpenChange={(open) => { if (!open) setCancelOrderId(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel this order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will mark the order as cancelled. The customer will no longer see it as active.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep order</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (cancelOrderId) {
+                  handleUpdateStatus(cancelOrderId, 'cancelled')
+                  setCancelOrderId(null)
+                }
+              }}
+            >
+              Cancel order
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Cancel bulk orders confirmation */}
+      <AlertDialog open={cancelBulkOrders} onOpenChange={setCancelBulkOrders}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel {selectedOrderIds.length} order{selectedOrderIds.length !== 1 ? 's' : ''}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will mark all selected orders as cancelled. Affected customers will no longer see them as active.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep orders</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                handleBulkStatusUpdate('cancelled')
+                setCancelBulkOrders(false)
+              }}
+            >
+              Cancel {selectedOrderIds.length} order{selectedOrderIds.length !== 1 ? 's' : ''}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

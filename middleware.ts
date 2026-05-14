@@ -44,8 +44,8 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  // Handle cashier and kitchen routes (staff session auth)
-  const staffMatch = pathname.match(/^\/([^/]+)\/(cashier|kitchen)/)
+  // Handle cashier, manager, and kitchen routes (staff session auth)
+  const staffMatch = pathname.match(/^\/([^/]+)\/(cashier|manager|kitchen)/)
   if (staffMatch) {
     const restaurantSlug = staffMatch[1]
     const subRoute = staffMatch[2]
@@ -77,7 +77,7 @@ export async function middleware(request: NextRequest) {
 
       const { data: staffAccount, error } = await supabase
         .from('staff_accounts')
-        .select('id, restaurants(slug)')
+        .select('id, role, restaurants(slug)')
         .eq('id', staffId)
         .eq('is_active', true)
         .single()
@@ -99,6 +99,26 @@ export async function middleware(request: NextRequest) {
         redirectUrl.searchParams.set('redirectedFrom', request.nextUrl.pathname)
         return NextResponse.redirect(redirectUrl)
       }
+
+      // Role-based access control
+      const role = staffAccount?.role
+
+      if (role === 'kitchen') {
+        // Kitchen role: only kitchen routes
+        if (subRoute !== 'kitchen') {
+          const redirectUrl = request.nextUrl.clone()
+          redirectUrl.pathname = `/${restaurantSlug}/kitchen`
+          return NextResponse.redirect(redirectUrl)
+        }
+      } else if (role === 'staff') {
+        // Staff role: only cashier and manager routes, no kitchen
+        if (subRoute === 'kitchen') {
+          const redirectUrl = request.nextUrl.clone()
+          redirectUrl.pathname = `/${restaurantSlug}/cashier`
+          return NextResponse.redirect(redirectUrl)
+        }
+      }
+      // owner and manager roles: access to all routes (no restrictions)
 
       // Gate kitchen routes behind subscription feature
       if (subRoute === 'kitchen') {
@@ -128,6 +148,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/:slug/cashier/:path*', '/:slug/kitchen/:path*'],
+  matcher: ['/admin/:path*', '/:slug/cashier/:path*', '/:slug/manager/:path*', '/:slug/kitchen/:path*'],
 }
 

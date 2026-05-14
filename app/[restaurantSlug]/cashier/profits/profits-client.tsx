@@ -193,7 +193,7 @@ export function ProfitsClient({ initialOrders, menuItems }: ProfitsClientProps) 
                   <div
                     key={bucket.hour}
                     className="rounded-md border p-2"
-                    style={{ backgroundColor: `rgba(16, 185, 129, ${0.08 + intensity * 0.35})` }}
+                    style={{ backgroundColor: `oklch(0.52 0.15 150 / ${0.08 + intensity * 0.35})` }}
                   >
                     <p className="font-semibold">{bucket.hour.toString().padStart(2, '0')}:00</p>
                     <p>{bucket.count} orders</p>

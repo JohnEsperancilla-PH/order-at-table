@@ -139,8 +139,8 @@ export function CategoriesManagementClient({
       </div>
 
       {notice && (
-        <Alert className="border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950">
-          <AlertDescription className="text-emerald-800 dark:text-emerald-200">{notice}</AlertDescription>
+        <Alert className="border-success/20 bg-success-muted">
+          <AlertDescription className="text-success-muted-foreground">{notice}</AlertDescription>
         </Alert>
       )}
 

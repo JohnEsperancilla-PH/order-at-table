@@ -335,7 +335,7 @@ export function OrderPageClient({
           {/* Hero — taller ratio for prominence */}
           <div className="relative overflow-hidden rounded-2xl ring-1 ring-black/5 dark:ring-white/10">
             <div
-              className="h-[clamp(110px,22dvh,180px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+              className="h-[clamp(110px,22dvh,180px)] w-full bg-gradient-to-br from-brand/20 to-brand/5"
               style={restaurant?.cover_image_url ? {
                 backgroundImage: `url(${restaurant.cover_image_url})`,
                 backgroundSize: 'cover',
@@ -625,7 +625,7 @@ export function OrderConfirmationView({
         {/* Hero — taller ratio */}
         <div className="relative overflow-hidden rounded-xl">
           <div
-            className="h-[clamp(110px,22dvh,180px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+            className="h-[clamp(110px,22dvh,180px)] w-full bg-gradient-to-br from-brand/20 to-brand/5"
             style={coverImageUrl ? {
               backgroundImage: `url(${coverImageUrl})`,
               backgroundSize: 'cover',
@@ -645,8 +645,8 @@ export function OrderConfirmationView({
 
         <Card className="text-center">
           <CardContent className="pt-6 pb-5 px-5 space-y-4">
-            <div className="mx-auto w-12 h-12 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
-              <CheckCircle2 className="w-6 h-6 text-green-600 dark:text-green-400" />
+            <div className="mx-auto w-12 h-12 rounded-full bg-success-muted flex items-center justify-center">
+              <CheckCircle2 className="w-6 h-6 text-success" />
             </div>
             <div className="space-y-1">
               <h2 className="text-xl font-bold">
@@ -688,7 +688,7 @@ export function OrderConfirmationView({
               <div className="flex items-center justify-center gap-3 flex-wrap">
                 <Badge
                   variant={isCompleted ? 'default' : isReady ? 'secondary' : 'outline'}
-                  className={`text-sm px-3 py-1.5 ${isReady ? 'bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800' : ''}`}
+                  className={`text-sm px-3 py-1.5 ${isReady ? 'bg-warning-muted text-warning-muted-foreground border-warning/20' : ''}`}
                 >
                   {statusText}
                 </Badge>

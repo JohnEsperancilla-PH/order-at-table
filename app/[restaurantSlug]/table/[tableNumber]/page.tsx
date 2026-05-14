@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { LiveIndicator } from '@/components/ui/live-indicator'
 import { Clock, Phone, UtensilsCrossed } from 'lucide-react'
 
 export default async function TableWelcomePage({
@@ -15,7 +16,7 @@ export default async function TableWelcomePage({
 
   try {
     if (!restaurantSlug || !tableNumber) {
-      return <div className="p-6 text-center">Invalid restaurant or table number</div>;
+      return <Card className="max-w-md mx-auto"><CardContent className="pt-6 text-center space-y-4"><p className="text-sm text-muted-foreground">Invalid restaurant or table number. Please check the QR code and try again.</p><Button asChild variant="outline"><Link href="/">Go Home</Link></Button></CardContent></Card>;
     }
 
     const table = await getTableByRestaurantSlugAndNumber(restaurantSlug, tableNumber)
@@ -29,7 +30,7 @@ export default async function TableWelcomePage({
       {/* Hero */}
       <div className="relative overflow-hidden">
         <div
-          className="h-[clamp(140px,30dvh,260px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+          className="h-[clamp(140px,30dvh,260px)] w-full bg-gradient-to-br from-brand/20 to-brand/5"
           style={restaurant?.cover_image_url ? {
             backgroundImage: `url(${restaurant.cover_image_url})`,
             backgroundSize: 'cover',
@@ -61,11 +62,8 @@ export default async function TableWelcomePage({
 
               {isOpen ? (
                 <>
-                  <Badge variant="default" className="bg-green-600 hover:bg-green-600 text-white">
-                    <span className="relative flex h-2 w-2 mr-1.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
-                    </span>
+                  <Badge variant="default" className="bg-success text-success-foreground hover:bg-success/90">
+                    <LiveIndicator color="white" className="mr-1" />
                     Open Now
                   </Badge>
 
@@ -78,7 +76,7 @@ export default async function TableWelcomePage({
                 </>
               ) : (
                 <div className="space-y-3">
-                  <Badge variant="secondary" className="text-red-600 dark:text-red-400 border-red-200 dark:border-red-900">
+                  <Badge variant="secondary" className="text-destructive border-destructive/20">
                     Closed
                   </Badge>
                   <p className="text-sm text-muted-foreground">

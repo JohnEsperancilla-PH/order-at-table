@@ -24,8 +24,8 @@ export default async function KitchenPage({
   if (!kitchenEnabled) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
-        <div className="rounded-full bg-amber-100 p-4 dark:bg-amber-950/50">
-          <Crown className="h-10 w-10 text-amber-600 dark:text-amber-500" />
+        <div className="rounded-full bg-warning-muted p-4">
+          <Crown className="h-10 w-10 text-warning" />
         </div>
         <div className="max-w-md space-y-2">
           <h1 className="text-2xl font-bold tracking-tight">Kitchen Display</h1>

@@ -13,15 +13,10 @@ import { Label } from '@/components/ui/label'
 import Image from 'next/image'
 import { Plus, Minus, Check, ShoppingBag, Search } from 'lucide-react'
 import { CartItem, MenuCategory, MenuItem } from '@/lib/types'
-import { cn, formatCurrency } from '@/lib/utils'
+import { cn, formatCurrency, isSupabasePublicMenuImage } from '@/lib/utils'
 
 function normalizeInstructions(s?: string | null) {
   return (s || '').trim()
-}
-
-function isSupabasePublicMenuImage(src: string) {
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '')
-  return Boolean(base && src.startsWith(`${base}/storage/v1/object/public/`))
 }
 
 function MenuItemPhoto({
@@ -278,7 +273,7 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
                 </span>
               )}
               <div className="flex min-w-0 items-center justify-between gap-3">
-                <span className="min-w-0 flex-1 text-sm font-bold tabular-nums text-primary sm:text-[15px]">
+                <span className="min-w-0 flex-1 text-sm font-bold tabular-nums text-brand sm:text-[15px]">
                   {calculatePriceRange(item)}
                 </span>
                 {showQuantityStepper && inCartQty > 0 ? (
@@ -578,7 +573,7 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
                       type="button"
                       onClick={() => setSelectedModifierId(mod.id)}
                       className={cn(
-                        'w-full touch-manipulation rounded-xl border-2 px-3 py-2.5 text-left ring-offset-background sm:px-3.5 sm:py-3',
+                        'w-full touch-manipulation rounded-xl border-2 px-3 py-2.5 min-h-11 text-left ring-offset-background sm:px-3.5 sm:py-3',
                         'motion-safe:transition-[border-color,background-color,box-shadow,transform,ring]',
                         'motion-safe:duration-150 motion-safe:ease-out motion-safe:active:scale-[0.995]',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',

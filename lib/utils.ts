@@ -20,3 +20,8 @@ export function hasFeature(
   if (!restaurant?.subscription_features) return false
   return restaurant.subscription_features[feature] === true
 }
+
+export function isSupabasePublicMenuImage(src: string) {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "")
+  return Boolean(base && src.startsWith(`${base}/storage/v1/object/public/`))
+}

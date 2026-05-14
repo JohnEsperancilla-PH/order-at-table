@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSyncedInitial } from '@/hooks/use-synced-initial'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -23,11 +23,12 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
+import { PageHeader } from '@/components/ui/page-header'
+import { EmptyState } from '@/components/ui/empty-state'
 import {
   Building2,
   Plus,
   Settings,
-  ExternalLink,
   Search,
   SlidersHorizontal,
   CircleCheck,
@@ -66,6 +67,13 @@ interface RestaurantsClientProps {
   firstTableByRestaurantId?: Record<string, string>
 }
 
+function slugify(name: string) {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 export function RestaurantsClient({
   initialRestaurants,
   firstTableByRestaurantId = {},
@@ -89,10 +97,9 @@ export function RestaurantsClient({
     description: '',
     contactNumber: '',
     openingHours: '',
-    latitude: '',
-    longitude: '',
-    geofenceRadius: '150',
   })
+
+  const generatedSlug = formData.name.trim() ? slugify(formData.name) : ''
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -119,7 +126,6 @@ export function RestaurantsClient({
       )
       router.refresh()
     } catch {
-      // revert on error — state stays in sync via re-render
     } finally {
       setFeatureLoading(null)
     }
@@ -152,31 +158,18 @@ export function RestaurantsClient({
     }
 
     setIsSubmitting(true)
-
     try {
       const newRestaurant = await createRestaurant(formData.name.trim(), {
         description: formData.description.trim() || undefined,
         contact_number: formData.contactNumber.trim() || undefined,
         opening_hours: formData.openingHours.trim() || undefined,
-        latitude: formData.latitude ? Number(formData.latitude) : undefined,
-        longitude: formData.longitude ? Number(formData.longitude) : undefined,
-        geofence_radius_meters: formData.geofenceRadius ? Number(formData.geofenceRadius) : undefined,
       })
 
       setRestaurants((prev) => [newRestaurant, ...prev])
       router.refresh()
-      setSuccess(`Restaurant "${newRestaurant.name}" created. Slug: ${newRestaurant.slug}`)
+      setSuccess(`Restaurant "${newRestaurant.name}" created — /${newRestaurant.slug}`)
 
-      setFormData({
-        name: '',
-        description: '',
-        contactNumber: '',
-        openingHours: '',
-        latitude: '',
-        longitude: '',
-        geofenceRadius: '150',
-      })
-
+      setFormData({ name: '', description: '', contactNumber: '', openingHours: '' })
       setTimeout(() => {
         setIsCreateDialogOpen(false)
         setSuccess(null)
@@ -209,115 +202,97 @@ export function RestaurantsClient({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <section className="rounded-xl border bg-card p-4 md:p-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Restaurants</h1>
-            <p className="mt-1 text-muted-foreground">
-              Manage restaurants, staff access, and cashier entry points.
-            </p>
-          </div>
-          <Button onClick={() => setIsCreateDialogOpen(true)} className="gap-2 shrink-0">
-            <Plus className="h-4 w-4" />
-            New Restaurant
+      <PageHeader
+        title="Restaurants"
+        description="Manage restaurants, staff access, and cashier entry points."
+      >
+        <Button onClick={() => setIsCreateDialogOpen(true)} className="gap-2">
+          <Plus className="h-4 w-4" />
+          New Restaurant
+        </Button>
+      </PageHeader>
+
+      {/* Filters */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+            placeholder="Search by name or slug"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={(v: 'all' | 'open' | 'closed') => setStatusFilter(v)}>
+          <SelectTrigger className="w-[160px]">
+            <SlidersHorizontal className="mr-2 h-4 w-4 text-muted-foreground" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="open">Open only</SelectItem>
+            <SelectItem value="closed">Closed only</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="flex gap-1 rounded-lg border p-1">
+          <Button variant={viewMode === 'grid' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('grid')}>
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+          <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('list')}>
+            <List className="h-4 w-4" />
           </Button>
         </div>
+      </div>
 
-        {/* Filters */}
-        <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-[1fr_200px_auto] md:items-center">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-              placeholder="Search by name or slug"
-            />
-          </div>
-          <Select
-            value={statusFilter}
-            onValueChange={(v: 'all' | 'open' | 'closed') => setStatusFilter(v)}
-          >
-            <SelectTrigger>
-              <SlidersHorizontal className="mr-2 h-4 w-4 text-muted-foreground" />
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="open">Open only</SelectItem>
-              <SelectItem value="closed">Closed only</SelectItem>
-            </SelectContent>
-          </Select>
-          <div className="flex gap-1 rounded-lg border p-1">
-            <Button
-              variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('grid')}
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('list')}
-            >
-              <List className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Stats badges */}
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Badge variant="secondary" className="gap-1.5">
-            <Building2 className="h-3.5 w-3.5" />
-            {restaurants.length} total
-          </Badge>
-          <Badge variant="outline" className="gap-1.5 border-emerald-500/30 text-emerald-700 dark:text-emerald-400">
-            <CircleCheck className="h-3.5 w-3.5" />
-            {openCount} open
-          </Badge>
-          <Badge variant="outline" className="gap-1.5 border-amber-500/30 text-amber-700 dark:text-amber-400">
-            <Clock3 className="h-3.5 w-3.5" />
-            {closedCount} closed
-          </Badge>
-        </div>
-      </section>
+      {/* Stats badges */}
+      <div className="flex flex-wrap gap-2">
+        <Badge variant="secondary" className="gap-1.5">
+          <Building2 className="h-3.5 w-3.5" />
+          {restaurants.length} total
+        </Badge>
+        <Badge variant="outline" className="gap-1.5 border-success/30 text-success">
+          <CircleCheck className="h-3.5 w-3.5" />
+          {openCount} open
+        </Badge>
+        <Badge variant="outline" className="gap-1.5 border-warning/30 text-warning">
+          <Clock3 className="h-3.5 w-3.5" />
+          {closedCount} closed
+        </Badge>
+      </div>
 
       {/* Content */}
       {restaurants.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="mb-4 rounded-full bg-muted p-4">
-              <Building2 className="h-12 w-12 text-muted-foreground" />
-            </div>
-            <h3 className="text-lg font-semibold">No restaurants yet</h3>
-            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-              Create your first restaurant to get started.
-            </p>
-            <Button onClick={() => setIsCreateDialogOpen(true)} className="mt-6">
-              Create Restaurant
-            </Button>
+          <CardContent className="pt-6">
+            <EmptyState
+              icon={Building2}
+              title="No restaurants yet"
+              description="Create your first restaurant to get started."
+              action={
+                <Button onClick={() => setIsCreateDialogOpen(true)}>Create Restaurant</Button>
+              }
+            />
           </CardContent>
         </Card>
       ) : filteredRestaurants.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <Search className="mb-4 h-12 w-12 text-muted-foreground/50" />
-            <h3 className="text-lg font-semibold">No matches</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              No restaurants match your search or filter.
-            </p>
-            <Button
-              variant="outline"
-              className="mt-6"
-              onClick={() => {
-                setSearchQuery('')
-                setStatusFilter('all')
-              }}
-            >
-              Clear filters
-            </Button>
+          <CardContent className="pt-6">
+            <EmptyState
+              icon={Search}
+              title="No matches"
+              description="No restaurants match your search or filter."
+              action={
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearchQuery('')
+                    setStatusFilter('all')
+                  }}
+                >
+                  Clear filters
+                </Button>
+              }
+            />
           </CardContent>
         </Card>
       ) : viewMode === 'list' ? (
@@ -326,7 +301,7 @@ export function RestaurantsClient({
             {filteredRestaurants.map((restaurant) => (
               <div
                 key={restaurant.id}
-                className="flex flex-col gap-4 px-5 py-5 transition-colors hover:bg-muted/30 md:flex-row md:items-center md:justify-between"
+                className="flex flex-col gap-4 px-5 py-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -335,7 +310,7 @@ export function RestaurantsClient({
                       {restaurant.is_open ? 'Open' : 'Closed'}
                     </Badge>
                     {restaurant.subscription_features?.kitchen === true && (
-                      <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-700 dark:text-amber-400">
+                      <Badge variant="outline" className="gap-1 border-warning/40 text-warning">
                         <Crown className="h-3 w-3" />
                         Kitchen
                       </Badge>
@@ -359,44 +334,29 @@ export function RestaurantsClient({
                       <Label className="cursor-pointer text-xs">Kitchen Display</Label>
                     </div>
                   </div>
-                  <p className="mt-2 text-xs text-muted-foreground/80">
-                    Created {format(new Date(restaurant.created_at), 'MMM d, yyyy')}
-                  </p>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
-                  <Button asChild variant="outline" size="sm" className="gap-1.5">
+                  <Button asChild variant="outline" size="sm">
                     <Link href={`/${restaurant.slug}/cashier`}>
-                      <Settings className="h-3.5 w-3.5" />
+                      <Settings className="mr-1.5 h-3.5 w-3.5" />
                       Cashier
                     </Link>
                   </Button>
-                  <Button asChild variant="outline" size="sm" className="gap-1.5">
-                    <a
-                      href={`/${restaurant.slug}/table/${firstTableByRestaurantId[restaurant.id] || '1'}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      Preview
-                    </a>
-                  </Button>
-                  <Button asChild variant="ghost" size="sm" className="gap-1.5">
+                  <Button asChild variant="ghost" size="sm">
                     <Link href={`/admin/restaurants/accounts?restaurant=${restaurant.id}`}>
-                      Accounts <ArrowRight className="h-3.5 w-3.5" />
+                      Accounts <ArrowRight className="ml-1 h-3.5 w-3.5" />
                     </Link>
                   </Button>
                   <Button
-                    type="button"
                     variant="ghost"
                     size="sm"
-                    className="gap-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     onClick={() => {
                       setDeleteError(null)
                       setRestaurantToDelete(restaurant)
                     }}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
-                    Delete
                   </Button>
                 </div>
               </div>
@@ -404,98 +364,67 @@ export function RestaurantsClient({
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filteredRestaurants.map((restaurant) => (
-            <Card
-              key={restaurant.id}
-              className="flex flex-col transition-all hover:-translate-y-0.5 hover:shadow-md"
-            >
+            <Card key={restaurant.id} className="flex flex-col transition-all hover:shadow-md">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="line-clamp-2 text-base">{restaurant.name}</CardTitle>
-                    <CardDescription className="mt-1 font-mono text-xs">
-                      {restaurant.slug}
-                    </CardDescription>
+                    <CardTitle className="text-base">{restaurant.name}</CardTitle>
+                    <p className="mt-1 font-mono text-xs text-muted-foreground">{restaurant.slug}</p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <Badge variant={restaurant.is_open ? 'default' : 'secondary'}>
-                      {restaurant.is_open ? 'Open' : 'Closed'}
-                    </Badge>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                      title="Delete restaurant"
-                      onClick={() => {
-                        setDeleteError(null)
-                        setRestaurantToDelete(restaurant)
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  <Badge variant={restaurant.is_open ? 'default' : 'secondary'} className="shrink-0">
+                    {restaurant.is_open ? 'Open' : 'Closed'}
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="flex flex-1 flex-col gap-3 pt-0">
                 {restaurant.description && (
-                  <p className="line-clamp-2 text-sm text-muted-foreground">
-                    {restaurant.description}
-                  </p>
+                  <p className="line-clamp-2 text-sm text-muted-foreground">{restaurant.description}</p>
                 )}
-                <div className="space-y-0.5 text-xs text-muted-foreground">
-                  {restaurant.contact_number && <div>Contact: {restaurant.contact_number}</div>}
-                  {restaurant.opening_hours && <div>Hours: {restaurant.opening_hours}</div>}
-                </div>
-                <Separator />
                 <div className="rounded-lg border px-3 py-2.5 space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Subscription Features</p>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Crown className="h-3.5 w-3.5 text-amber-500" />
+                      <Crown className="h-3.5 w-3.5 text-warning" />
                       <Label htmlFor={`kitchen-${restaurant.id}`} className="cursor-pointer text-xs">Kitchen Display</Label>
                     </div>
                     <Switch
                       id={`kitchen-${restaurant.id}`}
                       checked={restaurant.subscription_features?.kitchen === true}
                       disabled={featureLoading === `${restaurant.id}:kitchen`}
-                      onCheckedChange={(checked) =>
-                        handleToggleFeature(restaurant.id, 'kitchen', checked)
-                      }
+                      onCheckedChange={(checked) => handleToggleFeature(restaurant.id, 'kitchen', checked)}
                     />
                   </div>
                 </div>
-                <Separator className="my-1" />
-                <div className="mt-auto flex flex-wrap gap-2">
-                  <Button asChild variant="outline" size="sm" className="flex-1 gap-1.5">
+                <div className="mt-auto space-y-2">
+                  <Button asChild variant="outline" size="sm" className="w-full">
                     <Link href={`/${restaurant.slug}/cashier`}>
-                      <Settings className="h-3.5 w-3.5" />
-                      Cashier
+                      <Settings className="mr-1.5 h-3.5 w-3.5" />
+                      Cashier Console
                     </Link>
                   </Button>
-                  <Button asChild variant="outline" size="sm" className="flex-1 gap-1.5">
-                    <a
-                      href={`/${restaurant.slug}/table/${firstTableByRestaurantId[restaurant.id] || '1'}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                  <div className="flex gap-2">
+                    <Button asChild variant="ghost" size="sm" className="flex-1 text-muted-foreground">
+                      <Link href={`/admin/restaurants/accounts?restaurant=${restaurant.id}`}>
+                        Accounts <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => {
+                        setDeleteError(null)
+                        setRestaurantToDelete(restaurant)
+                      }}
                     >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      Preview
-                    </a>
-                  </Button>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
-                <Button asChild variant="ghost" size="sm" className="w-full gap-1.5 text-muted-foreground">
-                  <Link href={`/admin/restaurants/accounts?restaurant=${restaurant.id}`}>
-                    Manage accounts <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                </Button>
-                <p className="text-xs text-muted-foreground/60">
-                  Created {format(new Date(restaurant.created_at), 'MMM d, yyyy')}
-                </p>
               </CardContent>
             </Card>
-          ),)}
+          ))}
         </div>
       )}
 
@@ -508,17 +437,15 @@ export function RestaurantsClient({
               A unique slug will be auto-generated from the name.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4">
             {error && (
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
             {success && (
-              <Alert className="border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950">
-                <AlertDescription className="text-emerald-800 dark:text-emerald-200">
-                  {success}
-                </AlertDescription>
+              <Alert className="border-success/20 bg-success-muted">
+                <AlertDescription className="text-success-muted-foreground">{success}</AlertDescription>
               </Alert>
             )}
             <div className="space-y-2">
@@ -531,6 +458,12 @@ export function RestaurantsClient({
                 onChange={handleInputChange}
                 disabled={isSubmitting}
               />
+              {generatedSlug && (
+                <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                  <span className="text-xs text-muted-foreground">Slug:</span>
+                  <code className="text-xs font-mono font-semibold">{generatedSlug}</code>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
@@ -544,7 +477,7 @@ export function RestaurantsClient({
                 rows={3}
               />
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="contactNumber">Contact</Label>
                 <Input
@@ -557,7 +490,7 @@ export function RestaurantsClient({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="openingHours">Opening Hours</Label>
+                <Label htmlFor="openingHours">Hours</Label>
                 <Input
                   id="openingHours"
                   name="openingHours"
@@ -568,14 +501,8 @@ export function RestaurantsClient({
                 />
               </div>
             </div>
-
             <div className="flex gap-3 pt-2">
-              <Button
-                variant="outline"
-                onClick={() => setIsCreateDialogOpen(false)}
-                disabled={isSubmitting}
-                className="flex-1"
-              >
+              <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)} disabled={isSubmitting} className="flex-1">
                 Cancel
               </Button>
               <Button onClick={handleCreateRestaurant} disabled={isSubmitting} className="flex-1">
@@ -589,10 +516,7 @@ export function RestaurantsClient({
       <AlertDialog
         open={!!restaurantToDelete}
         onOpenChange={(open) => {
-          if (!open) {
-            setRestaurantToDelete(null)
-            setDeleteError(null)
-          }
+          if (!open) { setRestaurantToDelete(null); setDeleteError(null) }
         }}
       >
         <AlertDialogContent>

@@ -12,9 +12,10 @@ import { LogIn, Loader2 } from 'lucide-react'
 
 interface AdminLoginClientProps {
   restaurantSlug: string
+  redirectTo?: string
 }
 
-export function AdminLoginClient({ restaurantSlug }: AdminLoginClientProps) {
+export function AdminLoginClient({ restaurantSlug, redirectTo }: AdminLoginClientProps) {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -34,9 +35,10 @@ export function AdminLoginClient({ restaurantSlug }: AdminLoginClientProps) {
         sessionStorage.setItem(`staff_account_${restaurantSlug}`, JSON.stringify(account))
         // Set cookie so middleware allows access to cashier routes
         document.cookie = `staff_session_${restaurantSlug}=${account.id}; path=/; max-age=86400`
+        document.cookie = `staff_role_${restaurantSlug}=${account.role}; path=/; max-age=86400`
       }
 
-      router.replace(`/${restaurantSlug}/cashier`)
+      router.replace(redirectTo || `/${restaurantSlug}/cashier`)
     } catch (err: any) {
       setError(err.message || 'Invalid email or password')
       setIsLoading(false)
@@ -45,11 +47,11 @@ export function AdminLoginClient({ restaurantSlug }: AdminLoginClientProps) {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/20 p-4">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md shadow-md">
         <CardHeader className="space-y-2 text-center">
           <div className="flex justify-center mb-2">
-            <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
-              <LogIn className="h-6 w-6 text-primary-foreground" />
+            <div className="h-10 w-10 rounded-lg bg-brand flex items-center justify-center">
+              <LogIn className="h-6 w-6 text-brand-foreground" />
             </div>
           </div>
           <CardTitle className="text-2xl">Staff Sign In</CardTitle>
@@ -91,7 +93,7 @@ export function AdminLoginClient({ restaurantSlug }: AdminLoginClientProps) {
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full h-11" disabled={isLoading}>
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

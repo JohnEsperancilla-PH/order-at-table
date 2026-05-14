@@ -41,7 +41,7 @@ export default async function OrderPage({
             {/* Hero — mobile optimized */}
             <div className="relative overflow-hidden rounded-xl">
               <div
-                className="h-[clamp(70px,15dvh,130px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+                className="h-[clamp(70px,15dvh,130px)] w-full bg-gradient-to-br from-brand/20 to-brand/5"
                 style={restaurant.cover_image_url ? {
                   backgroundImage: `url(${restaurant.cover_image_url})`,
                   backgroundSize: 'cover',
@@ -69,7 +69,7 @@ export default async function OrderPage({
                 </div>
 
                 <div className="space-y-3">
-                  <Badge variant="secondary" className="text-red-600 dark:text-red-400 border-red-200 dark:border-red-900">
+                  <Badge variant="secondary" className="text-destructive border-destructive/20">
                     Closed
                   </Badge>
                   <p className="text-sm text-muted-foreground">

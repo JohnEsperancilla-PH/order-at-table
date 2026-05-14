@@ -31,7 +31,7 @@ export const KitchenTicket = memo(function KitchenTicket({ order, onComplete }: 
   const waitTime = formatDistanceToNow(orderTime)
 
   return (
-    <Card className="flex flex-col h-full border-2 shadow-sm">
+    <Card className="flex flex-col h-full border shadow-sm">
       <CardHeader className="bg-muted/50 py-3 px-4 border-b">
         <div className="flex justify-between items-start gap-2">
           <div>
@@ -61,7 +61,7 @@ export const KitchenTicket = memo(function KitchenTicket({ order, onComplete }: 
             <div key={item.id} className="space-y-1">
               <div className="flex justify-between items-start gap-3">
                 <div className="flex gap-2 items-start min-w-0">
-                  <span className="text-lg font-bold text-primary shrink-0">{item.quantity}x</span>
+                  <span className="text-lg font-bold text-brand shrink-0">{item.quantity}x</span>
                   <div className="min-w-0">
                     <p className="text-base font-semibold leading-tight">
                       {item.menu_items?.name || 'Unknown Item'}
@@ -76,9 +76,9 @@ export const KitchenTicket = memo(function KitchenTicket({ order, onComplete }: 
               </div>
               
               {item.special_instructions?.trim() && (
-                <div className="ml-7 p-2 rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 flex gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                  <p className="text-sm font-medium text-amber-800 dark:text-amber-300 leading-snug whitespace-pre-wrap">
+                <div className="ml-7 p-2 rounded-md bg-warning-muted border-warning/20 flex gap-2">
+                  <AlertCircle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+                  <p className="text-sm font-medium text-warning-muted-foreground leading-snug whitespace-pre-wrap">
                     {item.special_instructions.trim()}
                   </p>
                 </div>

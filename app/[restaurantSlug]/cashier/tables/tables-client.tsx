@@ -176,8 +176,8 @@ export function TablesManagementClient({
       </div>
 
       {notice && (
-        <Alert className="border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950">
-          <AlertDescription className="text-emerald-800 dark:text-emerald-200">{notice}</AlertDescription>
+        <Alert className="border-success/20 bg-success-muted">
+          <AlertDescription className="text-success-muted-foreground">{notice}</AlertDescription>
         </Alert>
       )}
 
@@ -249,7 +249,7 @@ export function TablesManagementClient({
                         onClick={() => handleCopyLink(table)}
                       >
                         {copiedTableId === table.id ? (
-                          <><Check className="mr-1.5 h-3.5 w-3.5 text-green-500" />Copied!</>
+                          <><Check className="mr-1.5 h-3.5 w-3.5 text-success" />Copied!</>
                         ) : (
                           <><Copy className="mr-1.5 h-3.5 w-3.5" />Copy Link</>
                         )}

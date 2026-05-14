@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { ArrowRight, User, Lock } from 'lucide-react'
 import { validateTablePin } from '@/lib/actions/tables'
 
@@ -82,7 +83,7 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
       <div className="mx-auto w-full md:max-w-[28rem] md:overflow-hidden md:rounded-[28px] md:border md:bg-background md:shadow-2xl">
       <div className="relative overflow-hidden">
         <div
-          className="h-[clamp(110px,22dvh,180px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
+          className="h-[clamp(110px,22dvh,180px)] w-full bg-gradient-to-br from-brand/20 to-brand/5"
           style={restaurantCoverImage ? {
             backgroundImage: `url(${restaurantCoverImage})`,
             backgroundSize: 'cover',
@@ -102,7 +103,7 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
 
       <div className="flex-1 px-4 sm:px-5 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] -mt-4 relative z-10">
         <div className="max-w-md mx-auto">
-          <div className={`bg-background border rounded-xl p-5 sm:p-6 space-y-6 motion-safe:transition-[opacity,transform] motion-safe:duration-500 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+          <div className={`bg-background border rounded-xl p-5 sm:p-6 shadow-sm space-y-6 motion-safe:transition-[opacity,transform] motion-safe:duration-500 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
 
             {!pinValidated ? (
               <>
@@ -133,7 +134,7 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
                   </div>
 
                   {pinError && (
-                    <p className="text-sm text-destructive text-center">{pinError}</p>
+                    <Alert variant="destructive"><AlertDescription>{pinError}</AlertDescription></Alert>
                   )}
 
                   <Button
@@ -173,7 +174,7 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
                   </div>
 
                   {error && (
-                    <p className="text-sm text-destructive text-center">{error}</p>
+                    <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>
                   )}
 
                   <Button
