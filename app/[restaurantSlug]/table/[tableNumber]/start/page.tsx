@@ -30,6 +30,7 @@ export default async function StartPage({ params }: Props) {
         restaurantName={restaurant?.name || ''}
         restaurantDescription={restaurant?.description || null}
         restaurantCoverImage={restaurant?.cover_image_url || null}
+        requiresPin={!!table.pin_code}
       />
     );
   } catch (error) {

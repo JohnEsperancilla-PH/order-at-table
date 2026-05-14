@@ -222,10 +222,9 @@ export function OrderPageClient({
   }
 
   const setLineSpecialInstructions = (lineId: string, text: string) => {
-    const trimmed = text.trim()
     setCart(prev =>
       prev.map(ci =>
-        ci.lineId === lineId ? { ...ci, special_instructions: trimmed || undefined } : ci
+        ci.lineId === lineId ? { ...ci, special_instructions: text || undefined } : ci
       )
     )
   }

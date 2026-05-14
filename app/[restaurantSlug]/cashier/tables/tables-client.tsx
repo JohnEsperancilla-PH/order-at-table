@@ -25,8 +25,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Plus, Edit, Trash2, QrCode, Copy, Check, TableProperties } from 'lucide-react'
-import { createTable, updateTable, deleteTable } from '@/lib/actions/tables'
+import { Plus, Edit, Trash2, QrCode, Copy, Check, TableProperties, RefreshCw } from 'lucide-react'
+import { createTable, updateTable, deleteTable, regenerateTablePin } from '@/lib/actions/tables'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface TablesManagementClientProps {
@@ -46,6 +46,7 @@ export function TablesManagementClient({
   const [selectedTable, setSelectedTable] = useState<any>(null)
   const [tableNumber, setTableNumber] = useState('')
   const [capacity, setCapacity] = useState('')
+  const [pinCode, setPinCode] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deleteTableId, setDeleteTableId] = useState<string | null>(null)
@@ -57,6 +58,7 @@ export function TablesManagementClient({
     setSelectedTable(null)
     setTableNumber('')
     setCapacity('')
+    setPinCode('')
     setError(null)
     setIsDialogOpen(true)
   }
@@ -65,6 +67,7 @@ export function TablesManagementClient({
     setSelectedTable(table)
     setTableNumber(table.table_number)
     setCapacity(table.capacity?.toString() || '')
+    setPinCode(table.pin_code || '')
     setError(null)
     setIsDialogOpen(true)
   }
@@ -84,19 +87,24 @@ export function TablesManagementClient({
       }
     }
 
+    const pin = pinCode.trim()
+    if (pin && !/^\d{4}$/.test(pin)) {
+      setError('PIN must be exactly 4 digits')
+      return
+    }
+
     setIsSubmitting(true)
     setError(null)
 
     try {
       if (selectedTable) {
-        // Update existing table
         await updateTable(selectedTable.id, {
           table_number: tableNumber.trim(),
           capacity: capacityNum,
+          pin_code: pin || null,
         })
       } else {
-        // Create new table
-        await createTable(restaurantId, tableNumber.trim(), capacityNum)
+        await createTable(restaurantId, tableNumber.trim(), capacityNum, pin || undefined)
       }
       router.refresh()
       setNotice(selectedTable ? 'Table updated successfully.' : 'Table added successfully.')
@@ -122,6 +130,17 @@ export function TablesManagementClient({
     } catch (err: any) {
       setError(err.message || 'Failed to delete table')
       setIsDeleteDialogOpen(false)
+    }
+  }
+
+  const handleRegeneratePin = async (tableId: string) => {
+    try {
+      await regenerateTablePin(tableId)
+      router.refresh()
+      setNotice('PIN regenerated.')
+      setTimeout(() => setNotice(null), 3000)
+    } catch (err: any) {
+      setError(err.message || 'Failed to regenerate PIN')
     }
   }
 
@@ -202,6 +221,23 @@ export function TablesManagementClient({
                     <p className="text-sm text-muted-foreground">
                       Capacity: {table.capacity || '—'}
                     </p>
+                    {table.pin_code ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">PIN:</span>
+                        <span className="text-sm font-mono font-bold tracking-widest">{table.pin_code}</span>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6"
+                          aria-label={`Regenerate PIN for table ${table.table_number}`}
+                          onClick={() => handleRegeneratePin(table.id)}
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">No PIN required</p>
+                    )}
                     <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono bg-muted/50 rounded-md px-2 py-1 w-fit">
                       /{restaurantSlug}/table/{table.table_number}/order
                     </div>
@@ -290,6 +326,22 @@ export function TablesManagementClient({
                 className="mt-1"
               />
             </div>
+            <div>
+              <Label htmlFor="pin-code">Table PIN (4 digits, leave empty for no PIN)</Label>
+              <Input
+                id="pin-code"
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                value={pinCode}
+                onChange={(e) => setPinCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="e.g., 4829"
+                className="mt-1 font-mono tracking-widest"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Customers must enter this PIN before placing an order.
+              </p>
+            </div>
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -339,4 +391,3 @@ export function TablesManagementClient({
     </div>
   )
 }
-

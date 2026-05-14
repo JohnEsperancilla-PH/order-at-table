@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ArrowRight, User } from 'lucide-react'
+import { ArrowRight, User, Lock } from 'lucide-react'
+import { validateTablePin } from '@/lib/actions/tables'
 
 interface StartOrderClientProps {
   tableId: string
@@ -12,9 +13,15 @@ interface StartOrderClientProps {
   restaurantName: string
   restaurantDescription: string | null
   restaurantCoverImage: string | null
+  requiresPin: boolean
 }
 
-export default function StartOrderClient({ tableId, tableNumber, restaurantSlug, restaurantName, restaurantDescription, restaurantCoverImage }: StartOrderClientProps) {
+export default function StartOrderClient({ tableId, tableNumber, restaurantSlug, restaurantName, restaurantDescription, restaurantCoverImage, requiresPin }: StartOrderClientProps) {
+  const [pin, setPin] = useState('')
+  const [pinValidated, setPinValidated] = useState(!requiresPin)
+  const [pinError, setPinError] = useState<string | null>(null)
+  const [validatingPin, setValidatingPin] = useState(false)
+
   const [name, setName] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -24,6 +31,30 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  const handlePinSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    const trimmed = pin.trim()
+    if (trimmed.length !== 4 || !/^\d{4}$/.test(trimmed)) {
+      setPinError('Please enter a valid 4-digit PIN')
+      return
+    }
+    setValidatingPin(true)
+    setPinError(null)
+    try {
+      const valid = await validateTablePin(tableId, trimmed)
+      if (valid) {
+        setPinValidated(true)
+      } else {
+        setPinError('Incorrect PIN. Please try again.')
+        setPin('')
+      }
+    } catch {
+      setPinError('Unable to verify PIN. Please try again.')
+    } finally {
+      setValidatingPin(false)
+    }
+  }
 
   const saveSessionAndContinue = async (e?: React.FormEvent) => {
     e?.preventDefault()
@@ -36,7 +67,7 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
     try {
       const sessionId = typeof crypto !== 'undefined' && (crypto as any).randomUUID ? (crypto as any).randomUUID() : Math.random().toString(36).slice(2)
       const key = `order_session_${tableId}`
-      const expiresAt = Date.now() + 30 * 60 * 1000 // 30 minutes
+      const expiresAt = Date.now() + 30 * 60 * 1000
       localStorage.setItem(key, JSON.stringify({ id: sessionId, name: name.trim(), expiresAt }))
       router.push(`/${restaurantSlug}/table/${tableNumber}/order`)
     } catch (err) {
@@ -49,7 +80,6 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
   return (
     <div className="min-h-[100dvh] bg-gradient-to-b from-background to-muted/20 md:px-6 md:py-8">
       <div className="mx-auto w-full md:max-w-[28rem] md:overflow-hidden md:rounded-[28px] md:border md:bg-background md:shadow-2xl">
-      {/* Hero header — matches table landing page */}
       <div className="relative overflow-hidden">
         <div
           className="h-[clamp(110px,22dvh,180px)] w-full bg-gradient-to-br from-primary/20 to-primary/5"
@@ -70,47 +100,94 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
         </div>
       </div>
 
-      {/* Name entry */}
       <div className="flex-1 px-4 sm:px-5 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] -mt-4 relative z-10">
         <div className="max-w-md mx-auto">
           <div className={`bg-background border rounded-xl p-5 sm:p-6 space-y-6 motion-safe:transition-[opacity,transform] motion-safe:duration-500 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-            <div className="text-center space-y-1">
-              <h2 className="text-xl font-semibold">Who&apos;s ordering?</h2>
-              <p className="text-sm text-muted-foreground">Table {tableNumber}</p>
-              <p className="text-sm text-muted-foreground">
-                Enter your name so we know who this order belongs to.
-              </p>
-            </div>
 
-            <form onSubmit={saveSessionAndContinue} className="space-y-4">
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  autoFocus
-                  value={name}
-                  onChange={(e) => {
-                    setName(e.target.value)
-                    if (error) setError(null)
-                  }}
-                  placeholder="Your name"
-                  className="pl-10 h-12 text-base"
-                />
-              </div>
+            {!pinValidated ? (
+              <>
+                <div className="text-center space-y-1">
+                  <h2 className="text-xl font-semibold">Table PIN Required</h2>
+                  <p className="text-sm text-muted-foreground">Table {tableNumber}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Enter the 4-digit PIN shown on your table.
+                  </p>
+                </div>
 
-              {error && (
-                <p className="text-sm text-destructive text-center">{error}</p>
-              )}
+                <form onSubmit={handlePinSubmit} className="space-y-4">
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      autoFocus
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={pin}
+                      onChange={(e) => {
+                        setPin(e.target.value.replace(/\D/g, '').slice(0, 4))
+                        if (pinError) setPinError(null)
+                      }}
+                      placeholder="Enter 4-digit PIN"
+                      className="pl-10 h-12 text-base font-mono tracking-[0.5em] text-center"
+                    />
+                  </div>
 
-              <Button
-                type="submit"
-                disabled={submitting || !name.trim()}
-                size="lg"
-                className="w-full rounded-xl h-12 text-base"
-              >
-                {submitting ? 'Starting...' : 'Continue'}
-                {!submitting && <ArrowRight className="w-4 h-4 ml-2" />}
-              </Button>
-            </form>
+                  {pinError && (
+                    <p className="text-sm text-destructive text-center">{pinError}</p>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={validatingPin || pin.length !== 4}
+                    size="lg"
+                    className="w-full rounded-xl h-12 text-base"
+                  >
+                    {validatingPin ? 'Verifying...' : 'Continue'}
+                    {!validatingPin && <ArrowRight className="w-4 h-4 ml-2" />}
+                  </Button>
+                </form>
+              </>
+            ) : (
+              <>
+                <div className="text-center space-y-1">
+                  <h2 className="text-xl font-semibold">Who&apos;s ordering?</h2>
+                  <p className="text-sm text-muted-foreground">Table {tableNumber}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Enter your name so we know who this order belongs to.
+                  </p>
+                </div>
+
+                <form onSubmit={saveSessionAndContinue} className="space-y-4">
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      autoFocus
+                      value={name}
+                      onChange={(e) => {
+                        setName(e.target.value)
+                        if (error) setError(null)
+                      }}
+                      placeholder="Your name"
+                      className="pl-10 h-12 text-base"
+                    />
+                  </div>
+
+                  {error && (
+                    <p className="text-sm text-destructive text-center">{error}</p>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={submitting || !name.trim()}
+                    size="lg"
+                    className="w-full rounded-xl h-12 text-base"
+                  >
+                    {submitting ? 'Starting...' : 'Continue'}
+                    {!submitting && <ArrowRight className="w-4 h-4 ml-2" />}
+                  </Button>
+                </form>
+              </>
+            )}
           </div>
         </div>
       </div>

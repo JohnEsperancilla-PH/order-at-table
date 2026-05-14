@@ -93,10 +93,15 @@ export async function getTablesByRestaurantSlug(restaurantSlug: string) {
   return data || []
 }
 
+function generatePinCode(): string {
+  return String(Math.floor(Math.random() * 10000)).padStart(4, '0')
+}
+
 export async function createTable(
   restaurantId: string,
   tableNumber: string,
-  capacity?: number
+  capacity?: number,
+  pinCode?: string | null
 ) {
   const supabase = createServiceClient()
 
@@ -112,6 +117,8 @@ export async function createTable(
     throw new Error('Table number already exists for this restaurant')
   }
 
+  const pin = pinCode !== undefined ? pinCode : generatePinCode()
+
   const { data, error } = await supabase
     .from('tables')
     .insert({
@@ -119,6 +126,7 @@ export async function createTable(
       table_number: tableNumber,
       capacity: capacity || null,
       is_active: true,
+      pin_code: pin,
     })
     .select()
     .single()
@@ -137,6 +145,7 @@ export async function updateTable(
     table_number?: string
     capacity?: number
     is_active?: boolean
+    pin_code?: string | null
   }
 ) {
   const supabase = createServiceClient()
@@ -204,5 +213,45 @@ export async function deleteTable(tableId: string) {
   }
 
   revalidatePath('/admin/tables')
+}
+
+export async function regenerateTablePin(tableId: string) {
+  const supabase = createServiceClient()
+  const pin = generatePinCode()
+
+  const { data, error } = await supabase
+    .from('tables')
+    .update({ pin_code: pin })
+    .eq('id', tableId)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to regenerate PIN: ${error.message}`)
+  }
+
+  revalidatePath('/admin/tables')
+  return data
+}
+
+export async function validateTablePin(tableId: string, pin: string) {
+  const supabase = createServiceClient()
+
+  const { data, error } = await supabase
+    .from('tables')
+    .select('id, pin_code')
+    .eq('id', tableId)
+    .eq('is_active', true)
+    .single()
+
+  if (error || !data) {
+    return false
+  }
+
+  if (!data.pin_code) {
+    return true
+  }
+
+  return data.pin_code === pin
 }
 

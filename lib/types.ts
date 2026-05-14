@@ -34,6 +34,7 @@ export interface Table {
   table_number: string
   capacity: number | null
   is_active: boolean
+  pin_code: string | null
   created_at: string
   updated_at: string
 }
