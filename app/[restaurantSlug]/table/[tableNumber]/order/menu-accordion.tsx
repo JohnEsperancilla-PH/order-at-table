@@ -346,11 +346,11 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
 
       {/* Search results or accordion */}
       {searchQuery.trim() ? (
-        <div className="grid grid-cols-1 gap-2 pb-1 md:gap-2.5">
+        <div className="grid grid-cols-1 gap-2 pb-1 md:grid-cols-2 md:gap-3">
           {searchedItems && searchedItems.length > 0 ? (
             searchedItems.map(renderItemCard)
           ) : (
-            <Card>
+            <Card className="md:col-span-2">
               <CardContent className="py-10 text-center text-muted-foreground">
                 No items match "{searchQuery}"
               </CardContent>
@@ -386,7 +386,7 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
                       </CardContent>
                     </Card>
                   ) : (
-                    <div className="grid grid-cols-1 gap-2 pb-1 md:gap-2.5">
+                    <div className="grid grid-cols-1 gap-2 pb-1 md:grid-cols-2 md:gap-3">
                       {items.map(renderItemCard)}
                     </div>
                   )}
@@ -522,7 +522,12 @@ export function MenuAccordion({ categories, menuItems, cart, onAddToCart, onUpda
       <Sheet open={isModifierSheetOpen} onOpenChange={setIsModifierSheetOpen}>
         <SheetContent
           side="bottom"
-          className="flex max-h-[min(88dvh,720px)] flex-col gap-0 rounded-t-2xl px-4 pb-0 pt-3 md:bottom-[calc(50%-420px+0.75rem)] md:left-1/2 md:w-[calc(28rem-1.5rem)] md:max-w-[calc(28rem-1.5rem)] md:-translate-x-1/2 md:rounded-2xl md:border md:pb-0 md:shadow-2xl"
+          className={cn(
+            'flex max-h-[min(88dvh,calc(100dvh-env(safe-area-inset-bottom,0px)-env(safe-area-inset-top,0px)-12px))] flex-col gap-0 rounded-t-2xl border-x border-t border-border bg-background px-4 pb-0 pt-3 shadow-2xl',
+            'sm:inset-x-auto sm:left-1/2 sm:right-auto sm:w-[min(28rem,calc(100vw-1rem))] sm:max-w-md sm:-translate-x-1/2',
+            'md:max-w-2xl md:w-[min(42rem,calc(100vw-2rem))]',
+            'md:bottom-6 md:rounded-2xl md:border md:pb-0 md:shadow-2xl',
+          )}
         >
           <div
             className="mx-auto mb-2 shrink-0 h-1 w-11 rounded-full bg-muted-foreground/20"

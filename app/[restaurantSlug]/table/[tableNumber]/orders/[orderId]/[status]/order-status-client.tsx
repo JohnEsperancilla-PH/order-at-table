@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Order } from '@/lib/types'
 import { getOrderById } from '@/lib/actions/orders'
@@ -23,28 +23,33 @@ export function OrderStatusClient({
   const [order, setOrder] = useState<Order>(initialOrder)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        setIsRefreshing(true)
-        const updatedOrder = await getOrderById(orderId, tableNumber)
-        if (updatedOrder) {
-          setOrder(updatedOrder)
-          if (updatedOrder.status !== order.status) {
+  const refreshNow = useCallback(async () => {
+    setIsRefreshing(true)
+    try {
+      const updatedOrder = await getOrderById(orderId, tableNumber)
+      if (!updatedOrder) return
+      setOrder(prev => {
+        const statusChanged = prev.status !== updatedOrder.status
+        if (statusChanged) {
+          queueMicrotask(() =>
             router.replace(
-              `/${restaurantSlug}/table/${tableNumber}/orders/${updatedOrder.id}/${updatedOrder.status}`
-            )
-          }
+              `/${restaurantSlug}/table/${tableNumber}/orders/${updatedOrder.id}/${updatedOrder.status}`,
+            ),
+          )
         }
-      } catch (error) {
-        console.error('Failed to refresh order status:', error)
-      } finally {
-        setIsRefreshing(false)
-      }
-    }, 5000)
+        return updatedOrder
+      })
+    } catch (error) {
+      console.error('Failed to refresh order status:', error)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [orderId, restaurantSlug, router, tableNumber])
 
+  useEffect(() => {
+    const interval = setInterval(() => void refreshNow(), 5000)
     return () => clearInterval(interval)
-  }, [orderId, order.status, router, tableNumber])
+  }, [refreshNow])
 
   return (
     <OrderConfirmationView
@@ -54,6 +59,7 @@ export function OrderStatusClient({
       restaurantSlug={restaurantSlug}
       tableNumber={(order as any)?.tables?.table_number}
       coverImageUrl={(order as any)?.tables?.restaurants?.cover_image_url}
+      onManualRefresh={refreshNow}
       onClose={() => {
         router.replace(`/${restaurantSlug}/table/${tableNumber}`)
       }}

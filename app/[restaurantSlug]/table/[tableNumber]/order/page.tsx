@@ -37,7 +37,7 @@ export default async function OrderPage({
     if (restaurant?.is_open === false) {
       return (
         <div className="min-h-[100dvh] bg-gradient-to-b from-background to-muted/20 pb-6 md:px-6 md:py-8">
-          <div className="mx-auto w-full max-w-md space-y-4 p-4 md:max-w-[28rem] md:overflow-hidden md:rounded-[28px] md:border md:bg-background md:shadow-2xl">
+          <div className="mx-auto w-full max-w-md space-y-4 p-4 md:max-w-4xl md:p-6">
             {/* Hero — mobile optimized */}
             <div className="relative overflow-hidden rounded-xl">
               <div

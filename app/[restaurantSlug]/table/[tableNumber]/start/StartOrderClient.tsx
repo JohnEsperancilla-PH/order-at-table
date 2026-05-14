@@ -1,11 +1,13 @@
 "use client"
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { ArrowRight, User, Lock } from 'lucide-react'
+import { ArrowRight, User, Lock, ArrowLeft, Loader2 } from 'lucide-react'
 import { validateTablePin } from '@/lib/actions/tables'
+import { cn } from '@/lib/utils'
 
 interface StartOrderClientProps {
   tableId: string
@@ -22,6 +24,7 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
   const [pinValidated, setPinValidated] = useState(!requiresPin)
   const [pinError, setPinError] = useState<string | null>(null)
   const [validatingPin, setValidatingPin] = useState(false)
+  const pinAutoTriedRef = useRef<string>('')
 
   const [name, setName] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
@@ -33,29 +36,46 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
     setMounted(true)
   }, [])
 
+  const verifyPinDigits = useCallback(
+    async (digits: string) => {
+      const trimmed = digits.trim()
+      if (trimmed.length !== 4 || !/^\d{4}$/.test(trimmed)) {
+        setPinError('Please enter a valid 4-digit PIN')
+        return
+      }
+      setValidatingPin(true)
+      setPinError(null)
+      try {
+        const valid = await validateTablePin(tableId, trimmed)
+        if (valid) {
+          setPinValidated(true)
+        } else {
+          setPinError('Incorrect PIN. Please try again.')
+          setPin('')
+          pinAutoTriedRef.current = ''
+        }
+      } catch {
+        setPinError('Unable to verify PIN. Please try again.')
+        pinAutoTriedRef.current = ''
+      } finally {
+        setValidatingPin(false)
+      }
+    },
+    [tableId],
+  )
+
   const handlePinSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault()
-    const trimmed = pin.trim()
-    if (trimmed.length !== 4 || !/^\d{4}$/.test(trimmed)) {
-      setPinError('Please enter a valid 4-digit PIN')
-      return
-    }
-    setValidatingPin(true)
-    setPinError(null)
-    try {
-      const valid = await validateTablePin(tableId, trimmed)
-      if (valid) {
-        setPinValidated(true)
-      } else {
-        setPinError('Incorrect PIN. Please try again.')
-        setPin('')
-      }
-    } catch {
-      setPinError('Unable to verify PIN. Please try again.')
-    } finally {
-      setValidatingPin(false)
-    }
+    await verifyPinDigits(pin)
   }
+
+  useEffect(() => {
+    if (!requiresPin || pinValidated || validatingPin) return
+    if (pin.length !== 4 || !/^\d{4}$/.test(pin)) return
+    if (pinAutoTriedRef.current === pin) return
+    pinAutoTriedRef.current = pin
+    void verifyPinDigits(pin)
+  }, [pin, pinValidated, requiresPin, validatingPin, verifyPinDigits])
 
   const saveSessionAndContinue = async (e?: React.FormEvent) => {
     e?.preventDefault()
@@ -78,9 +98,11 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
     }
   }
 
+  const welcomeHref = `/${restaurantSlug}/table/${tableNumber}`
+
   return (
     <div className="min-h-[100dvh] bg-gradient-to-b from-background to-muted/20 md:px-6 md:py-8">
-      <div className="mx-auto w-full md:max-w-[28rem] md:overflow-hidden md:rounded-[28px] md:border md:bg-background md:shadow-2xl">
+      <div className="mx-auto w-full max-w-md md:max-w-4xl">
       <div className="relative overflow-hidden">
         <div
           className="h-[clamp(110px,22dvh,180px)] w-full bg-gradient-to-br from-brand/20 to-brand/5"
@@ -101,16 +123,51 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
         </div>
       </div>
 
-      <div className="flex-1 px-4 sm:px-5 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] -mt-4 relative z-10">
-        <div className="max-w-md mx-auto">
+      <div className="relative z-10 -mt-4 flex-1 px-4 pt-5 sm:px-5 sm:pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] md:px-6 md:pt-8">
+        <div className="max-w-md mx-auto space-y-3 md:max-w-2xl">
+          <Button variant="ghost" size="sm" className="-ml-2 h-10 gap-1.5 px-2 text-muted-foreground hover:text-foreground" asChild>
+            <Link href={welcomeHref}>
+              <ArrowLeft className="h-4 w-4 shrink-0" />
+              Back to table
+            </Link>
+          </Button>
+
+          {requiresPin ? (
+            <div className="flex items-center justify-center gap-2" role="navigation" aria-label="Steps">
+              <span
+                className={cn(
+                  'rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide',
+                  !pinValidated ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+                )}
+              >
+                1 Verify
+              </span>
+              <span className="text-muted-foreground/40 text-xs" aria-hidden>
+                —
+              </span>
+              <span
+                className={cn(
+                  'rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide',
+                  pinValidated ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+                )}
+              >
+                2 Your name
+              </span>
+            </div>
+          ) : (
+            <p className="text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Your details
+            </p>
+          )}
+
           <div className={`bg-background border rounded-xl p-5 sm:p-6 shadow-sm space-y-6 motion-safe:transition-[opacity,transform] motion-safe:duration-500 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
 
             {!pinValidated ? (
               <>
                 <div className="text-center space-y-1">
-                  <h2 className="text-xl font-semibold">Table PIN Required</h2>
+                  <h2 className="text-xl font-semibold tracking-tight">Table PIN Required</h2>
                   <p className="text-sm text-muted-foreground">Table {tableNumber}</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground leading-snug">
                     Enter the 4-digit PIN shown on your table.
                   </p>
                 </div>
@@ -125,11 +182,14 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
                       maxLength={4}
                       value={pin}
                       onChange={(e) => {
-                        setPin(e.target.value.replace(/\D/g, '').slice(0, 4))
+                        const next = e.target.value.replace(/\D/g, '').slice(0, 4)
+                        setPin(next)
                         if (pinError) setPinError(null)
+                        if (next.length < 4) pinAutoTriedRef.current = ''
                       }}
                       placeholder="Enter 4-digit PIN"
-                      className="pl-10 h-12 text-base font-mono tracking-[0.5em] text-center"
+                      autoComplete="one-time-code"
+                      className="h-12 pl-10 text-base tracking-normal"
                     />
                   </div>
 
@@ -141,19 +201,28 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
                     type="submit"
                     disabled={validatingPin || pin.length !== 4}
                     size="lg"
-                    className="w-full rounded-xl h-12 text-base"
+                    className="w-full rounded-xl h-12 text-base touch-manipulation"
                   >
-                    {validatingPin ? 'Verifying...' : 'Continue'}
-                    {!validatingPin && <ArrowRight className="w-4 h-4 ml-2" />}
+                    {validatingPin ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Verifying…
+                      </>
+                    ) : (
+                      <>
+                        Continue
+                        <ArrowRight className="w-4 h-4 ml-2" />
+                      </>
+                    )}
                   </Button>
                 </form>
               </>
             ) : (
               <>
                 <div className="text-center space-y-1">
-                  <h2 className="text-xl font-semibold">Who&apos;s ordering?</h2>
+                  <h2 className="text-xl font-semibold tracking-tight">Who&apos;s ordering?</h2>
                   <p className="text-sm text-muted-foreground">Table {tableNumber}</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground leading-snug">
                     Enter your name so we know who this order belongs to.
                   </p>
                 </div>
@@ -181,10 +250,19 @@ export default function StartOrderClient({ tableId, tableNumber, restaurantSlug,
                     type="submit"
                     disabled={submitting || !name.trim()}
                     size="lg"
-                    className="w-full rounded-xl h-12 text-base"
+                    className="w-full rounded-xl h-12 text-base touch-manipulation"
                   >
-                    {submitting ? 'Starting...' : 'Continue'}
-                    {!submitting && <ArrowRight className="w-4 h-4 ml-2" />}
+                    {submitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Starting…
+                      </>
+                    ) : (
+                      <>
+                        Continue to menu
+                        <ArrowRight className="w-4 h-4 ml-2" />
+                      </>
+                    )}
                   </Button>
                 </form>
               </>

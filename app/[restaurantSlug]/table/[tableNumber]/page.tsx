@@ -26,7 +26,7 @@ export default async function TableWelcomePage({
 
   return (
     <div className="min-h-[100dvh] bg-gradient-to-b from-background to-muted/20 md:px-6 md:py-8">
-      <div className="mx-auto w-full md:max-w-[28rem] md:overflow-hidden md:rounded-[28px] md:border md:bg-background md:shadow-2xl">
+      <div className="mx-auto w-full max-w-md md:max-w-4xl">
       {/* Hero */}
       <div className="relative overflow-hidden">
         <div
@@ -50,8 +50,8 @@ export default async function TableWelcomePage({
         </div>
       </div>
 
-      <div className="relative z-10 -mt-4 flex-1 px-4 sm:px-5 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
-        <div className="max-w-md mx-auto space-y-4">
+      <div className="relative z-10 -mt-4 flex-1 px-4 sm:px-5 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] md:px-6">
+        <div className="mx-auto max-w-md space-y-4 md:max-w-2xl">
           {/* Table info card */}
           <Card className="!gap-0">
             <CardContent className="pt-5 pb-5 text-center space-y-4">
@@ -67,9 +67,9 @@ export default async function TableWelcomePage({
                     Open Now
                   </Badge>
 
-                  <Button asChild size="lg" className="w-full rounded-xl h-12 text-base">
+                  <Button asChild size="lg" className="w-full rounded-xl h-12 text-base touch-manipulation shadow-sm">
                     <Link href={`/${restaurantSlug}/table/${table.table_number}/start`}>
-                      <UtensilsCrossed className="w-5 h-5 mr-2" />
+                      <UtensilsCrossed className="w-5 h-5 mr-2 shrink-0" />
                       Start Your Order
                     </Link>
                   </Button>
@@ -109,6 +109,10 @@ export default async function TableWelcomePage({
               )}
             </CardContent>
           </Card>
+
+          <p className="text-center text-[11px] leading-relaxed text-muted-foreground px-2">
+            Wrong table? Scan the QR code at your seat again or ask staff for help.
+          </p>
         </div>
       </div>
       </div>
