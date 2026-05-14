@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSyncedInitial } from '@/hooks/use-synced-initial'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -213,172 +213,214 @@ export function AccountsClient({
     }
   }
 
+  const hasActiveFilters = searchQuery.trim() !== '' || restaurantFilter !== 'all'
+  const activeCount = accounts.filter((a) => a.is_active).length
+  const ownerCount = accounts.filter((a) => a.role === 'owner').length
+  const kitchenCount = accounts.filter((a) => a.role === 'kitchen').length
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <PageHeader
+        eyebrow="Platform"
         title="Staff Accounts"
         description="Create and manage staff accounts for each restaurant."
       >
-        <Button onClick={() => setIsCreateOpen(true)} className="gap-2">
+        <Button onClick={() => setIsCreateOpen(true)} size="sm">
           <UserPlus className="h-4 w-4" />
-          Create Account
+          Create account
         </Button>
       </PageHeader>
 
-      {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-            placeholder="Search by name, email, or restaurant"
-          />
-        </div>
-        <Select value={restaurantFilter} onValueChange={setRestaurantFilter}>
-          <SelectTrigger className="w-[200px]">
-            <Building2 className="mr-2 h-4 w-4 text-muted-foreground" />
-            <SelectValue placeholder="All restaurants" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All restaurants</SelectItem>
-            {restaurants.map((r) => (
-              <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Stats */}
-      <div className="flex flex-wrap gap-2">
-        <Badge variant="secondary" className="gap-1.5">
-          <Users className="h-3.5 w-3.5" />
+      <div className="flex flex-wrap items-center gap-2 text-[12px]">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 font-medium">
+          <Users className="h-3 w-3" />
           {accounts.length} total
-        </Badge>
-        <Badge variant="outline">{accounts.filter((a) => a.is_active).length} active</Badge>
-        <Badge variant="outline" className="border-brand/30 text-brand">
-          {accounts.filter((a) => a.role === 'owner').length} owners
-        </Badge>
-        <Badge variant="outline" className="border-warning/40 text-warning">
-          {accounts.filter((a) => a.role === 'kitchen').length} kitchen
-        </Badge>
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2.5 py-1 font-medium text-success">
+          {activeCount} active
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand/10 px-2.5 py-1 font-medium text-brand">
+          <Crown className="h-3 w-3" />
+          {ownerCount} owners
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning/10 px-2.5 py-1 font-medium text-warning">
+          <ChefHat className="h-3 w-3" />
+          {kitchenCount} kitchen
+        </span>
       </div>
 
-      {/* Table */}
-      {accounts.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6">
-            <EmptyState
-              icon={Users}
-              title="No staff accounts yet"
-              description="Create your first staff account to give restaurant staff access to the cashier."
-              action={<Button onClick={() => setIsCreateOpen(true)}>Create Account</Button>}
+      <Card className="overflow-hidden py-0">
+        {/* Controls */}
+        <div className="flex flex-col gap-2 border-b border-border/70 bg-secondary/30 px-5 py-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by name, email, or restaurant"
+              className="h-8 pl-8 text-[13px]"
             />
-          </CardContent>
-        </Card>
-      ) : filteredAccounts.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6">
-            <EmptyState
-              icon={Search}
-              title="No matches"
-              description="No accounts match your search or filter."
-              action={
-                <Button variant="outline" onClick={() => { setSearchQuery(''); setRestaurantFilter('all') }}>
-                  Clear filters
-                </Button>
-              }
-            />
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Restaurant</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="w-12" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredAccounts.map((account) => {
-                  const roleCfg = ROLE_CONFIG[account.role] || ROLE_CONFIG.staff
-                  const Icon = roleCfg.icon
-                  return (
-                    <TableRow key={account.id}>
-                      <TableCell className="font-medium">{account.name}</TableCell>
-                      <TableCell>
-                        <span className="flex items-center gap-1.5 text-sm">
-                          <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                          {account.email}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        {account.restaurant ? (
-                          <Link
-                            href={`/${account.restaurant.slug}/cashier`}
-                            className="flex items-center gap-1.5 text-sm hover:underline"
-                          >
-                            {account.restaurant.name}
-                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                          </Link>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={roleCfg.variant} className={`gap-1 ${roleCfg.className}`}>
-                          <Icon className="h-3 w-3" />
-                          {roleCfg.label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={account.is_active ? 'default' : 'secondary'}>
-                          {account.is_active ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {format(new Date(account.created_at), 'MMM d, yyyy')}
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleToggleActive(account)}>
-                              {account.is_active ? (
-                                <><PowerOff className="mr-2 h-4 w-4" /> Deactivate</>
-                              ) : (
-                                <><Power className="mr-2 h-4 w-4" /> Activate</>
-                              )}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => setDeleteTarget(account)}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" /> Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
           </div>
-        </Card>
-      )}
+          <Select value={restaurantFilter} onValueChange={setRestaurantFilter}>
+            <SelectTrigger className="h-8 w-[200px] text-[12.5px]">
+              <Building2 className="mr-1 h-3 w-3 text-muted-foreground" />
+              <SelectValue placeholder="All restaurants" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All restaurants</SelectItem>
+              {restaurants.map((r) => (
+                <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setSearchQuery(''); setRestaurantFilter('all') }}
+              className="h-8 px-2 text-[12px] text-muted-foreground"
+            >
+              Clear
+            </Button>
+          )}
+        </div>
+
+        {/* Table */}
+        {accounts.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title="No staff accounts yet"
+            description="Create your first staff account to give restaurant staff access to the cashier."
+            action={<Button size="sm" onClick={() => setIsCreateOpen(true)}>Create account</Button>}
+          />
+        ) : filteredAccounts.length === 0 ? (
+          <EmptyState
+            icon={Search}
+            title="No matches"
+            description="No accounts match your search or filter."
+            action={
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setSearchQuery(''); setRestaurantFilter('all') }}
+              >
+                Clear filters
+              </Button>
+            }
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Restaurant</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="w-12 text-right">{''}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredAccounts.map((account) => {
+                const roleCfg = ROLE_CONFIG[account.role] || ROLE_CONFIG.staff
+                const Icon = roleCfg.icon
+                return (
+                  <TableRow key={account.id}>
+                    <TableCell>
+                      <span className="text-[13.5px] font-semibold tracking-tight">
+                        {account.name}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="flex items-center gap-1.5 text-[13px]">
+                        <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                        {account.email}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {account.restaurant ? (
+                        <Link
+                          href={`/${account.restaurant.slug}/cashier`}
+                          className="inline-flex items-center gap-1 text-[13px] font-medium hover:text-brand"
+                        >
+                          {account.restaurant.name}
+                          <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                        </Link>
+                      ) : (
+                        <span className="text-[13px] text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={`gap-1 ${roleCfg.className}`}
+                      >
+                        <Icon className="h-3 w-3" />
+                        {roleCfg.label}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {account.is_active ? (
+                        <Badge
+                          variant="outline"
+                          className="gap-1 border-success/30 bg-success/10 text-success"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                          Active
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className="gap-1 border-border bg-muted text-muted-foreground"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
+                          Inactive
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-[12.5px] text-muted-foreground">
+                      {format(new Date(account.created_at), 'MMM d, yyyy')}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon-sm" className="h-7 w-7">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleToggleActive(account)}>
+                            {account.is_active ? (
+                              <><PowerOff className="mr-2 h-4 w-4" /> Deactivate</>
+                            ) : (
+                              <><Power className="mr-2 h-4 w-4" /> Activate</>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => setDeleteTarget(account)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        )}
+
+        {filteredAccounts.length > 0 && (
+          <div className="border-t border-border/70 bg-secondary/30 px-5 py-2.5 text-[12px] text-muted-foreground">
+            Showing <span className="num font-medium text-foreground">{filteredAccounts.length}</span>{' '}
+            of <span className="num font-medium text-foreground">{accounts.length}</span>{' '}
+            {accounts.length === 1 ? 'account' : 'accounts'}
+          </div>
+        )}
+      </Card>
 
       {/* Create dialog */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>

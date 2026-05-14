@@ -88,36 +88,48 @@ export function AdminLayout({ children, restaurantSlug, kitchenEnabled = false }
     <SidebarProvider>
       <AdminSidebar restaurantSlug={restaurantSlug} kitchenEnabled={kitchenEnabled} staffRole={staffRole} />
       <SidebarInset>
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-2 border-b bg-background/95 px-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/70">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-2 h-4" />
-          <Link href={homeLink} className="text-sm font-semibold md:text-base">
+        <header className="app-header sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 px-4 md:h-16 md:px-6">
+          <SidebarTrigger className="-ml-1 h-8 w-8" />
+          <Separator orientation="vertical" className="mr-1 h-5" />
+          <Link
+            href={homeLink}
+            className="truncate text-sm font-semibold tracking-tight md:text-[15px]"
+          >
             {heading}
           </Link>
           <div className="hidden md:flex">
-            <Badge variant="outline" className="gap-1.5 font-normal">
-              {restaurantSlug ? <Store className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-              {restaurantSlug ? (isManagerView ? 'Manager View' : 'Restaurant View') : 'Platform View'}
+            <Badge
+              variant="outline"
+              className="gap-1.5 rounded-full border-border bg-secondary/60 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+            >
+              {restaurantSlug ? <Store className="h-3 w-3" /> : <ShieldCheck className="h-3 w-3" />}
+              {restaurantSlug ? (isManagerView ? 'Manager view' : 'Restaurant view') : 'Platform view'}
             </Badge>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1.5">
             {isCashierView && (
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={toggleDarkMode}
-                className="gap-1.5"
+                className="h-8 gap-1.5 px-2.5 text-muted-foreground hover:text-foreground"
+                title={isDarkMode ? 'Switch to light' : 'Switch to dark'}
               >
                 {isDarkMode ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-                {isDarkMode ? 'Light' : 'Dark'}
+                <span className="hidden sm:inline">{isDarkMode ? 'Light' : 'Dark'}</span>
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={handleSignOut}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSignOut}
+              className="h-8 px-3 text-[13px] font-medium"
+            >
               Sign out
             </Button>
           </div>
         </header>
-        <div className="flex flex-1 flex-col p-4 md:p-6">
+        <div className="flex flex-1 flex-col px-4 py-6 md:px-8 md:py-8">
           <div className="mx-auto w-full max-w-7xl">
             {children}
           </div>

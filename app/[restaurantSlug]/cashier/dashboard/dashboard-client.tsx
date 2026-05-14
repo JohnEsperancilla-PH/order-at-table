@@ -75,31 +75,82 @@ export function DashboardClient({ restaurant, counts, recentOrders }: DashboardC
     }
   }
 
+  type StatCard = {
+    label: string
+    value: number
+    valueClass?: string
+    icon: typeof ClipboardList
+    tone: 'neutral' | 'warning' | 'success' | 'destructive'
+  }
+
+  const stats: StatCard[] = [
+    {
+      label: 'All orders',
+      value: counts.totalOrders,
+      icon: ClipboardList,
+      tone: 'neutral',
+    },
+    {
+      label: 'Pending',
+      value: counts.pendingOrders,
+      valueClass: 'text-warning',
+      icon: Clock,
+      tone: 'warning',
+    },
+    {
+      label: 'Completed today',
+      value: counts.completedToday,
+      icon: CheckCircle2,
+      tone: 'success',
+    },
+    {
+      label: 'Cancelled',
+      value: counts.cancelledToday,
+      icon: XCircle,
+      tone: 'destructive',
+    },
+  ]
+
+  const toneClass: Record<string, string> = {
+    neutral: 'bg-foreground/[0.06] text-foreground',
+    warning: 'bg-warning/10 text-warning',
+    success: 'bg-success/10 text-success',
+    destructive: 'bg-destructive/10 text-destructive',
+  }
+
   return (
-    <div className="space-y-6">
-      <PageHeader title="Dashboard" description="Quick overview of today's operations.">
-        <div className="flex items-center gap-3 rounded-lg border p-3">
+    <div className="space-y-7">
+      <PageHeader
+        eyebrow="Restaurant"
+        title="Dashboard"
+        description="Quick overview of today's operations."
+      >
+        <div className="inline-flex items-center gap-3 rounded-full border border-border bg-background px-3 py-1.5">
           <Switch
             id="restaurant-open"
             checked={isOpen}
             onCheckedChange={handleToggleOpen}
             disabled={toggling}
           />
-          <Label htmlFor="restaurant-open" className="cursor-pointer font-medium flex items-center gap-1.5">
+          <Label htmlFor="restaurant-open" className="cursor-pointer">
             {toggling ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Updating…
+              </span>
             ) : isOpen ? (
-              <Badge variant="outline" className="border-success/30 bg-success-muted text-success-muted-foreground gap-1">
+              <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-success">
                 <span className="relative flex h-2 w-2">
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
                 </span>
                 Open
-              </Badge>
+              </span>
             ) : (
-              <Badge variant="outline" className="border-destructive/20 text-destructive gap-1">
-                <span className="relative flex h-2 w-2 rounded-full bg-destructive" />
+              <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
+                <span className="h-2 w-2 rounded-full bg-muted-foreground/60" />
                 Closed
-              </Badge>
+              </span>
             )}
           </Label>
         </div>
@@ -112,99 +163,90 @@ export function DashboardClient({ restaurant, counts, recentOrders }: DashboardC
         </Alert>
       )}
 
-      {/* Restaurant identity card */}
-      <Card>
-        <CardHeader className="pb-3">
+      {/* Restaurant identity row */}
+      <Card className="overflow-hidden py-0">
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand/10 text-brand">
+            <div className="grid h-10 w-10 place-items-center rounded-[10px] bg-brand/10 text-brand">
               <Store className="h-5 w-5" />
             </div>
-            <div>
-              <CardTitle className="text-lg">{restaurant.name}</CardTitle>
-              <p className="text-sm text-muted-foreground font-mono">{restaurant.slug}</p>
+            <div className="min-w-0">
+              <p className="text-[15px] font-semibold tracking-tight">{restaurant.name}</p>
+              <p className="font-mono text-[12px] text-muted-foreground">/{restaurant.slug}</p>
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2">
+          <div className="flex gap-2">
             <Button size="sm" variant="outline" asChild>
               <Link href={`/${restaurant.slug}/cashier/settings`}>
-                Restaurant settings <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                Settings
+                <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </Button>
-            <Button size="sm" variant="outline" asChild>
+            <Button size="sm" asChild>
               <Link href={`/${restaurant.slug}/cashier`}>
-                Orders console <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                Orders
+                <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Stat cards */}
+      {/* Today metrics */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <ClipboardList className="h-3.5 w-3.5" />
-              All orders
-            </div>
-            <p className="text-2xl font-bold tabular-nums">{counts.totalOrders}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <Clock className="h-3.5 w-3.5" />
-              Pending
-            </div>
-            <p className="text-2xl font-bold tabular-nums text-warning">{counts.pendingOrders}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-              Completed today
-            </div>
-            <p className="text-2xl font-bold tabular-nums">{counts.completedToday}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <XCircle className="h-3.5 w-3.5 text-destructive" />
-              Cancelled
-            </div>
-            <p className="text-2xl font-bold tabular-nums">{counts.cancelledToday}</p>
-          </CardContent>
-        </Card>
+        {stats.map((stat) => (
+          <Card key={stat.label} className="stat-card py-0">
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[12px] font-medium text-muted-foreground">{stat.label}</p>
+                <div className={`grid h-7 w-7 shrink-0 place-items-center rounded-md ${toneClass[stat.tone]}`}>
+                  <stat.icon className="h-3.5 w-3.5" strokeWidth={2} />
+                </div>
+              </div>
+              <p className={`num mt-2 text-[24px] font-semibold leading-none tracking-tight ${stat.valueClass ?? ''}`}>
+                {stat.value}
+              </p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      {/* Menu & Tables quick stats */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card>
-          <CardContent className="p-4 flex items-center justify-between">
+      {/* Menu & Tables */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Card className="stat-card py-0">
+          <CardContent className="flex items-center justify-between p-4">
             <div>
-              <p className="text-xs text-muted-foreground">Menu items</p>
-              <p className="text-2xl font-bold tabular-nums">{counts.menuItems}</p>
+              <p className="flex items-center gap-2 text-[12px] font-medium text-muted-foreground">
+                <Utensils className="h-3.5 w-3.5" />
+                Menu items
+              </p>
+              <p className="num mt-1.5 text-[24px] font-semibold leading-none tracking-tight">
+                {counts.menuItems}
+              </p>
             </div>
-            <Button variant="ghost" size="sm" asChild>
+            <Button variant="outline" size="sm" asChild>
               <Link href={`/${restaurant.slug}/cashier/menu`}>
-                Manage <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                Manage
+                <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </Button>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center justify-between">
+        <Card className="stat-card py-0">
+          <CardContent className="flex items-center justify-between p-4">
             <div>
-              <p className="text-xs text-muted-foreground">Tables</p>
-              <p className="text-2xl font-bold tabular-nums">{counts.tables}</p>
+              <p className="flex items-center gap-2 text-[12px] font-medium text-muted-foreground">
+                <TableProperties className="h-3.5 w-3.5" />
+                Tables
+              </p>
+              <p className="num mt-1.5 text-[24px] font-semibold leading-none tracking-tight">
+                {counts.tables}
+              </p>
             </div>
-            <Button variant="ghost" size="sm" asChild>
+            <Button variant="outline" size="sm" asChild>
               <Link href={`/${restaurant.slug}/cashier/tables`}>
-                Manage <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                Manage
+                <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </Button>
           </CardContent>
@@ -212,55 +254,60 @@ export function DashboardClient({ restaurant, counts, recentOrders }: DashboardC
       </div>
 
       {/* Recent orders */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Recent Orders</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {recentOrders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
-              <Package className="h-8 w-8 opacity-30" />
-              <p className="text-sm">No orders today</p>
-              <Button size="sm" variant="outline" asChild>
-                <Link href={`/${restaurant.slug}/cashier`}>Go to orders</Link>
-              </Button>
+      <Card className="overflow-hidden py-0">
+        <div className="flex items-center justify-between border-b border-border/70 px-5 py-3.5">
+          <div>
+            <p className="section-eyebrow">Recent activity</p>
+            <h2 className="mt-0.5 text-[15px] font-semibold tracking-tight">Recent orders</h2>
+          </div>
+          {recentOrders.length > 5 && (
+            <Button variant="ghost" size="sm" asChild>
+              <Link href={`/${restaurant.slug}/cashier`}>
+                View all
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          )}
+        </div>
+        {recentOrders.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 px-5 py-10 text-center">
+            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-muted/60 ring-1 ring-inset ring-border/60">
+              <Package className="h-5 w-5 text-muted-foreground/70" />
             </div>
-          ) : (
-            <div className="divide-y">
-              {recentOrders.slice(0, 5).map((order) => (
-                <div key={order.id} className="flex items-center justify-between px-4 py-3">
-                  <div className="min-w-0">
-                    <p className="font-mono text-sm font-semibold tracking-wider">
-                      {order.confirmation_code}
-                    </p>
-                    <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                      <span>Table {order.tables?.table_number || 'N/A'}</span>
-                      <span>&middot;</span>
-                      <span>{formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}</span>
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-bold tabular-nums">
-                      {formatCurrency(order.total_amount)}
-                    </p>
-                    <Badge variant="secondary" className="text-[10px] mt-0.5">
-                      {order.status.replace(/_/g, ' ')}
-                    </Badge>
+            <div>
+              <p className="text-[14px] font-semibold tracking-tight">No orders today</p>
+              <p className="mt-0.5 text-[12.5px] text-muted-foreground">Orders will appear here as they come in.</p>
+            </div>
+            <Button size="sm" variant="outline" asChild>
+              <Link href={`/${restaurant.slug}/cashier`}>Go to orders</Link>
+            </Button>
+          </div>
+        ) : (
+          <div className="divide-y divide-border/70">
+            {recentOrders.slice(0, 5).map((order) => (
+              <div key={order.id} className="data-row flex items-center justify-between gap-3 px-5 py-3">
+                <div className="min-w-0">
+                  <p className="num font-mono text-[13px] font-semibold tracking-[0.08em]">
+                    {order.confirmation_code}
+                  </p>
+                  <div className="mt-0.5 flex items-center gap-2 text-[12px] text-muted-foreground">
+                    <span>Table {order.tables?.table_number || 'N/A'}</span>
+                    <span aria-hidden>·</span>
+                    <span>{formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-          {recentOrders.length > 5 && (
-            <div className="px-4 py-3 border-t">
-              <Button variant="ghost" size="sm" className="w-full" asChild>
-                <Link href={`/${restaurant.slug}/cashier`}>
-                  View all orders <ArrowRight className="ml-1 h-3.5 w-3.5" />
-                </Link>
-              </Button>
-            </div>
-          )}
-        </CardContent>
+                <div className="shrink-0 text-right">
+                  <p className="num text-[13.5px] font-semibold">
+                    {formatCurrency(order.total_amount)}
+                  </p>
+                  <Badge variant="secondary" className="mt-0.5 px-1.5 py-0 text-[10px] font-normal capitalize">
+                    {order.status.replace(/_/g, ' ')}
+                  </Badge>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
     </div>
   )

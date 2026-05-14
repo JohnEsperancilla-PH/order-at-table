@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -46,66 +46,75 @@ export function AdminLoginClient({ restaurantSlug, redirectTo }: AdminLoginClien
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/20 p-4">
-      <Card className="w-full max-w-md shadow-md">
-        <CardHeader className="space-y-2 text-center">
-          <div className="flex justify-center mb-2">
-            <div className="h-10 w-10 rounded-lg bg-brand flex items-center justify-center">
-              <LogIn className="h-6 w-6 text-brand-foreground" />
-            </div>
+    <div className="grid min-h-screen place-items-center bg-muted/30 p-4">
+      <div className="w-full max-w-[400px]">
+        <div className="mb-6 flex flex-col items-center text-center">
+          <div className="mb-3 grid h-11 w-11 place-items-center rounded-xl bg-brand text-brand-foreground shadow-sm">
+            <LogIn className="h-5 w-5" />
           </div>
-          <CardTitle className="text-2xl">Staff Sign In</CardTitle>
-          <CardDescription>Enter your credentials to access the dashboard</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {error && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+          <h1 className="text-[20px] font-semibold tracking-tight">Staff Sign In</h1>
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            Enter your credentials to access the dashboard
+          </p>
+        </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="staff@example.com"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                disabled={isLoading}
-                required
-                autoComplete="email"
-              />
-            </div>
+        <Card className="overflow-hidden py-0">
+          <CardContent className="p-6">
+            {error && (
+              <Alert variant="destructive" className="mb-4 py-2">
+                <AlertDescription className="text-[13px]">{error}</AlertDescription>
+              </Alert>
+            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                disabled={isLoading}
-                required
-                autoComplete="current-password"
-              />
-            </div>
+            <form onSubmit={handleSubmit} className="space-y-3.5">
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-[13px] font-medium">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="staff@example.com"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  disabled={isLoading}
+                  required
+                  autoComplete="email"
+                  className="h-10"
+                />
+              </div>
 
-            <Button type="submit" className="w-full h-11" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                'Sign In'
-              )}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-[13px] font-medium">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  disabled={isLoading}
+                  required
+                  autoComplete="current-password"
+                  className="h-10"
+                />
+              </div>
+
+              <Button type="submit" className="h-10 w-full" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Signing in…
+                  </>
+                ) : (
+                  'Sign in'
+                )}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <p className="mt-4 text-center text-[12px] text-muted-foreground">
+          Restaurant: <span className="font-mono">{restaurantSlug}</span>
+        </p>
+      </div>
     </div>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -29,61 +29,68 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/20 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-2 text-center">
-          <div className="flex justify-center mb-2">
-            <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
-              <LogIn className="h-6 w-6 text-primary-foreground" />
-            </div>
+    <div className="grid min-h-screen place-items-center bg-muted/30 p-4">
+      <div className="w-full max-w-[400px]">
+        <div className="mb-6 flex flex-col items-center text-center">
+          <div className="mb-3 grid h-11 w-11 place-items-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+            <LogIn className="h-5 w-5" />
           </div>
-          <CardTitle className="text-2xl">Platform Admin</CardTitle>
-          <CardDescription>Sign in to manage restaurants and staff</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {error && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="admin@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={isLoading}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isLoading}
-                required
-              />
-            </div>
-
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Signing in...' : 'Sign In'}
-            </Button>
-          </form>
-
-          <p className="text-xs text-muted-foreground text-center mt-4">
-            Contact your administrator for login credentials
+          <h1 className="text-[20px] font-semibold tracking-tight">Platform Admin</h1>
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            Sign in to manage restaurants and staff
           </p>
-        </CardContent>
-      </Card>
+        </div>
+
+        <Card className="overflow-hidden py-0">
+          <CardContent className="p-6">
+            {error && (
+              <Alert variant="destructive" className="mb-4 py-2">
+                <AlertDescription className="text-[13px]">{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <form onSubmit={handleLogin} className="space-y-3.5">
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-[13px] font-medium">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="admin@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading}
+                  required
+                  className="h-10"
+                  autoComplete="email"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-[13px] font-medium">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
+                  required
+                  className="h-10"
+                  autoComplete="current-password"
+                />
+              </div>
+
+              <Button type="submit" className="h-10 w-full" disabled={isLoading}>
+                {isLoading ? 'Signing in…' : 'Sign in'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <p className="mt-4 text-center text-[12px] text-muted-foreground">
+          Contact your administrator for login credentials
+        </p>
+      </div>
     </div>
   )
 }

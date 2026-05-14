@@ -4,9 +4,11 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { getOrdersByStatusAndRestaurantSlug, updateOrderStatus } from '@/lib/actions/orders'
 import { KitchenTicket } from './kitchen-ticket'
 import { Button } from '@/components/ui/button'
-import { RefreshCw, Inbox, LayoutGrid, AlertCircle } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { RefreshCw, Inbox, AlertCircle } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { PageHeader } from '@/components/ui/page-header'
+import { EmptyState } from '@/components/ui/empty-state'
+import { LiveIndicator } from '@/components/ui/live-indicator'
 
 interface KitchenDashboardClientProps {
   initialOrders: any[]
@@ -73,44 +75,31 @@ export function KitchenDashboardClient({ initialOrders, restaurantSlug }: Kitche
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <LayoutGrid className="w-8 h-8 text-primary" />
-            Kitchen Display
-          </h1>
-          <p className="text-muted-foreground">
-            Manage active tickets and special instructions
-          </p>
+      <PageHeader
+        eyebrow="Kitchen"
+        title="Kitchen Display"
+        description="Manage active tickets and special instructions."
+      >
+        <div className="hidden text-right sm:block">
+          <p className="text-[11px] text-muted-foreground">Last updated</p>
+          <p className="num text-[13px] font-medium">{lastUpdated.toLocaleTimeString()}</p>
         </div>
-        
-        <div className="flex items-center gap-3">
-          <div className="text-right hidden sm:block">
-            <p className="text-xs text-muted-foreground">Last updated</p>
-            <p className="text-sm font-medium tabular-nums">
-              {lastUpdated.toLocaleTimeString()}
-            </p>
-          </div>
-          
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => loadOrders()}
-            disabled={isRefreshing}
-            className={isRefreshing ? 'animate-spin' : ''}
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-          
-          <Badge variant="outline" className="h-9 px-4 gap-2 border-2">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-success/90" />
-            </span>
-            LIVE
-          </Badge>
-        </div>
-      </div>
+
+        <Button
+          variant="outline"
+          size="icon-sm"
+          onClick={() => loadOrders()}
+          disabled={isRefreshing}
+          aria-label="Refresh orders"
+        >
+          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+        </Button>
+
+        <span className="inline-flex h-8 items-center gap-2 rounded-full border border-success/30 bg-success/10 px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-success">
+          <LiveIndicator color="success" />
+          Live
+        </span>
+      </PageHeader>
 
       {error && (
         <Alert variant="destructive">
@@ -126,20 +115,20 @@ export function KitchenDashboardClient({ initialOrders, restaurantSlug }: Kitche
       )}
 
       {orders.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-muted/20 rounded-2xl border-2 border-dashed">
-          <div className="bg-muted p-6 rounded-full mb-4">
-            <Inbox className="w-12 h-12 text-muted-foreground/50" />
-          </div>
-          <h3 className="text-xl font-semibold">Kitchen is Clear</h3>
-          <p className="text-muted-foreground">Waiting for new confirmed orders...</p>
+        <div className="rounded-xl border border-dashed border-border bg-muted/30">
+          <EmptyState
+            icon={Inbox}
+            title="Kitchen is clear"
+            description="Waiting for new confirmed orders. Tickets will appear automatically as they come in."
+          />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {orders.map((order) => (
-            <KitchenTicket 
-              key={order.id} 
-              order={order} 
-              onComplete={handleCompleteOrder} 
+            <KitchenTicket
+              key={order.id}
+              order={order}
+              onComplete={handleCompleteOrder}
             />
           ))}
         </div>

@@ -38,13 +38,6 @@ interface AdminSidebarProps {
 export function AdminSidebar({ restaurantSlug, kitchenEnabled = false, staffRole }: AdminSidebarProps) {
   const pathname = usePathname()
 
-  const isActivePath = (url: string) => {
-    if (url === '/admin') {
-      return pathname === '/admin' || pathname === '/admin/dashboard'
-    }
-    return pathname === url || pathname.startsWith(`${url}/`)
-  }
-
   const getPrimaryMenuItems = (slug?: string) => {
     if (slug) {
       const isKitchenView = pathname.startsWith(`/${slug}/kitchen`)
@@ -65,12 +58,12 @@ export function AdminSidebar({ restaurantSlug, kitchenEnabled = false, staffRole
         return [
           {
             title: 'Dashboard',
-            url: `/${slug}/manager`,
+            url: `/${slug}/manager/dashboard`,
             icon: Home,
           },
           {
             title: 'Orders',
-            url: `/${slug}/manager`,
+            url: `/${slug}/manager/orders`,
             icon: LayoutDashboard,
           },
           ...(kitchenEnabled
@@ -181,6 +174,26 @@ export function AdminSidebar({ restaurantSlug, kitchenEnabled = false, staffRole
         },
       ]
 
+  // Pick exactly ONE active URL across all menu items using longest-prefix
+  // matching. This prevents a parent route (e.g. /admin/restaurants) from
+  // staying highlighted when on a child route (e.g. /admin/restaurants/accounts).
+  const allItemUrls = [
+    ...primaryItems.map((i) => i.url),
+    ...secondaryItems.map((i) => i.url),
+  ]
+
+  // Treat /admin as alias of /admin/dashboard for matching purposes.
+  const normalizedPath = pathname === '/admin/dashboard' ? '/admin' : pathname
+
+  const activeUrl = allItemUrls.reduce<string | null>((best, url) => {
+    const matches = normalizedPath === url || normalizedPath.startsWith(`${url}/`)
+    if (!matches) return best
+    if (!best || url.length > best.length) return url
+    return best
+  }, null)
+
+  const isActiveUrl = (url: string) => activeUrl === url
+
   const consoleLabel = isKitchenView
     ? 'Kitchen Console'
     : isManagerView
@@ -195,40 +208,53 @@ export function AdminSidebar({ restaurantSlug, kitchenEnabled = false, staffRole
       ? 'Focused cashier tools for orders, menus, and categories.'
       : 'Manage restaurants, staff accounts, and platform operations.'
 
+  const primaryGroupLabel = isKitchenView
+    ? 'Kitchen'
+    : isManagerView
+      ? 'Manage'
+      : restaurantSlug
+        ? 'Operate'
+        : 'Platform'
+
   return (
     <Sidebar>
-      <SidebarHeader className="border-b border-sidebar-border/50 px-3 py-4">
-        <div className="flex items-center gap-2">
-          <div className={`flex h-8 w-8 items-center justify-center rounded-md ${restaurantSlug ? 'bg-brand/15 text-brand' : 'bg-sidebar-accent text-sidebar-accent-foreground'}`}>
-            {restaurantSlug ? <Store className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
+      <SidebarHeader className="border-b border-sidebar-border/60 px-3 py-3.5">
+        <div className="flex items-center gap-2.5">
+          <div
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] ${
+              restaurantSlug
+                ? 'bg-brand/12 text-brand'
+                : 'bg-foreground/[0.06] text-foreground'
+            }`}
+          >
+            {restaurantSlug ? <Store className="h-[18px] w-[18px]" /> : <Shield className="h-[18px] w-[18px]" />}
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{consoleLabel}</p>
-            <p className="truncate text-xs text-sidebar-foreground/70">
+          <div className="min-w-0 leading-tight">
+            <p className="truncate text-[13px] font-semibold tracking-tight">{consoleLabel}</p>
+            <p className="truncate text-[11px] text-sidebar-foreground/65">
               {restaurantSlug ? restaurantSlug : 'Operations Center'}
             </p>
           </div>
         </div>
       </SidebarHeader>
-      <SidebarContent>
+
+      <SidebarContent className="px-1 py-2">
         <SidebarGroup>
-          <SidebarGroupLabel>
-            {isKitchenView
-              ? 'Kitchen Navigation'
-              : isManagerView
-                ? 'Manager Navigation'
-                : restaurantSlug
-                  ? 'Cashier Navigation'
-                  : 'Platform Navigation'}
+          <SidebarGroupLabel className="px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-foreground/55">
+            {primaryGroupLabel}
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="gap-0.5">
               {primaryItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActivePath(item.url)}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActiveUrl(item.url)}
+                    className="h-9 rounded-md px-2.5 text-[13px] font-medium data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:shadow-[inset_2px_0_0_0_var(--brand)]"
+                  >
                     <Link href={item.url}>
-                      <item.icon className="w-4 h-4" />
-                      <span>{item.title}</span>
+                      <item.icon className="h-[16px] w-[16px] shrink-0" />
+                      <span className="truncate">{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -239,15 +265,21 @@ export function AdminSidebar({ restaurantSlug, kitchenEnabled = false, staffRole
 
         {secondaryItems.length > 0 && (
           <SidebarGroup>
-            <SidebarGroupLabel>{restaurantSlug ? 'Switch View' : 'External'}</SidebarGroupLabel>
+            <SidebarGroupLabel className="px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-foreground/55">
+              {restaurantSlug ? 'Switch' : 'External'}
+            </SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu>
+              <SidebarMenu className="gap-0.5">
                 {secondaryItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={isActivePath(item.url)}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActiveUrl(item.url)}
+                      className="h-9 rounded-md px-2.5 text-[13px] font-normal text-sidebar-foreground/80 hover:text-sidebar-foreground"
+                    >
                       <Link href={item.url}>
-                        <item.icon className="w-4 h-4" />
-                        <span>{item.title}</span>
+                        <item.icon className="h-[16px] w-[16px] shrink-0" />
+                        <span className="truncate">{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -257,8 +289,9 @@ export function AdminSidebar({ restaurantSlug, kitchenEnabled = false, staffRole
           </SidebarGroup>
         )}
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border/50 p-2">
-        <p className="px-2 text-xs leading-relaxed text-sidebar-foreground/70">
+
+      <SidebarFooter className="border-t border-sidebar-border/60 p-3">
+        <p className="text-[11px] leading-relaxed text-sidebar-foreground/60">
           {footerText}
         </p>
       </SidebarFooter>

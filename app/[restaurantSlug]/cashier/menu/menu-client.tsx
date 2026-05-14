@@ -621,10 +621,6 @@ export function MenuManagementClient({
           </p>
         </div>
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
-          <Button onClick={handleOpenAddItem}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Menu Item
-          </Button>
           <div className="flex items-center gap-2">
             <Switch
               id="auto-refresh-menu"
@@ -635,6 +631,10 @@ export function MenuManagementClient({
               Auto-refresh
             </Label>
           </div>
+          <Button onClick={handleOpenAddItem}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Menu Item
+          </Button>
           <Button
             variant="outline"
             size="sm"

@@ -201,31 +201,46 @@ export function RestaurantsClient({
   const closedCount = restaurants.length - openCount
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <PageHeader
+        eyebrow="Platform"
         title="Restaurants"
         description="Manage restaurants, staff access, and cashier entry points."
       >
-        <Button onClick={() => setIsCreateDialogOpen(true)} className="gap-2">
+        <Button onClick={() => setIsCreateDialogOpen(true)} size="sm">
           <Plus className="h-4 w-4" />
-          New Restaurant
+          New restaurant
         </Button>
       </PageHeader>
 
-      {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 font-medium text-foreground">
+          <Building2 className="h-3 w-3" />
+          {restaurants.length} total
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2.5 py-1 font-medium text-success">
+          <CircleCheck className="h-3 w-3" />
+          {openCount} open
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 font-medium text-warning">
+          <Clock3 className="h-3 w-3" />
+          {closedCount} closed
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
+            className="h-9 pl-9"
             placeholder="Search by name or slug"
           />
         </div>
         <Select value={statusFilter} onValueChange={(v: 'all' | 'open' | 'closed') => setStatusFilter(v)}>
-          <SelectTrigger className="w-[160px]">
-            <SlidersHorizontal className="mr-2 h-4 w-4 text-muted-foreground" />
+          <SelectTrigger className="h-9 w-[160px]">
+            <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -234,30 +249,26 @@ export function RestaurantsClient({
             <SelectItem value="closed">Closed only</SelectItem>
           </SelectContent>
         </Select>
-        <div className="flex gap-1 rounded-lg border p-1">
-          <Button variant={viewMode === 'grid' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('grid')}>
-            <LayoutGrid className="h-4 w-4" />
+        <div className="flex gap-0.5 rounded-md border bg-secondary/40 p-0.5">
+          <Button
+            variant={viewMode === 'grid' ? 'default' : 'ghost'}
+            size="icon-sm"
+            onClick={() => setViewMode('grid')}
+            className="h-7 w-7"
+            aria-label="Grid view"
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
           </Button>
-          <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('list')}>
-            <List className="h-4 w-4" />
+          <Button
+            variant={viewMode === 'list' ? 'default' : 'ghost'}
+            size="icon-sm"
+            onClick={() => setViewMode('list')}
+            className="h-7 w-7"
+            aria-label="List view"
+          >
+            <List className="h-3.5 w-3.5" />
           </Button>
         </div>
-      </div>
-
-      {/* Stats badges */}
-      <div className="flex flex-wrap gap-2">
-        <Badge variant="secondary" className="gap-1.5">
-          <Building2 className="h-3.5 w-3.5" />
-          {restaurants.length} total
-        </Badge>
-        <Badge variant="outline" className="gap-1.5 border-success/30 text-success">
-          <CircleCheck className="h-3.5 w-3.5" />
-          {openCount} open
-        </Badge>
-        <Badge variant="outline" className="gap-1.5 border-warning/30 text-warning">
-          <Clock3 className="h-3.5 w-3.5" />
-          {closedCount} closed
-        </Badge>
       </div>
 
       {/* Content */}
@@ -296,65 +307,75 @@ export function RestaurantsClient({
           </CardContent>
         </Card>
       ) : viewMode === 'list' ? (
-        <Card>
-          <div className="divide-y">
+        <Card className="overflow-hidden py-0">
+          <div className="divide-y divide-border/70">
             {filteredRestaurants.map((restaurant) => (
               <div
                 key={restaurant.id}
-                className="flex flex-col gap-4 px-5 py-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between"
+                className="data-row flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-semibold">{restaurant.name}</h3>
-                    <Badge variant={restaurant.is_open ? 'default' : 'secondary'}>
+                    <h3 className="text-[15px] font-semibold tracking-tight">{restaurant.name}</h3>
+                    <Badge
+                      variant="outline"
+                      className={
+                        restaurant.is_open
+                          ? 'border-success/30 bg-success/10 text-success'
+                          : 'border-border bg-muted text-muted-foreground'
+                      }
+                    >
                       {restaurant.is_open ? 'Open' : 'Closed'}
                     </Badge>
                     {restaurant.subscription_features?.kitchen === true && (
-                      <Badge variant="outline" className="gap-1 border-warning/40 text-warning">
+                      <Badge
+                        variant="outline"
+                        className="gap-1 border-warning/40 bg-warning/10 text-warning"
+                      >
                         <Crown className="h-3 w-3" />
                         Kitchen
                       </Badge>
                     )}
                   </div>
-                  <p className="mt-0.5 font-mono text-xs text-muted-foreground">{restaurant.slug}</p>
+                  <p className="mt-0.5 font-mono text-xs text-muted-foreground">/{restaurant.slug}</p>
                   {restaurant.description && (
-                    <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">
+                    <p className="mt-1 line-clamp-1 text-[13px] text-muted-foreground">
                       {restaurant.description}
                     </p>
                   )}
-                  <div className="mt-3 flex items-center gap-3">
-                    <div className="flex items-center gap-2 rounded-lg border px-3 py-1.5">
-                      <Switch
-                        checked={restaurant.subscription_features?.kitchen === true}
-                        disabled={featureLoading === `${restaurant.id}:kitchen`}
-                        onCheckedChange={(checked) =>
-                          handleToggleFeature(restaurant.id, 'kitchen', checked)
-                        }
-                      />
-                      <Label className="cursor-pointer text-xs">Kitchen Display</Label>
-                    </div>
+                  <div className="mt-3 inline-flex items-center gap-2 rounded-md border border-border/80 bg-background px-2.5 py-1.5">
+                    <Switch
+                      checked={restaurant.subscription_features?.kitchen === true}
+                      disabled={featureLoading === `${restaurant.id}:kitchen`}
+                      onCheckedChange={(checked) =>
+                        handleToggleFeature(restaurant.id, 'kitchen', checked)
+                      }
+                    />
+                    <Label className="cursor-pointer text-[12px] font-medium">Kitchen Display</Label>
                   </div>
                 </div>
-                <div className="flex shrink-0 flex-wrap gap-2">
+                <div className="flex shrink-0 flex-wrap gap-1.5">
                   <Button asChild variant="outline" size="sm">
                     <Link href={`/${restaurant.slug}/cashier`}>
-                      <Settings className="mr-1.5 h-3.5 w-3.5" />
+                      <Settings className="h-3.5 w-3.5" />
                       Cashier
                     </Link>
                   </Button>
                   <Button asChild variant="ghost" size="sm">
                     <Link href={`/admin/restaurants/accounts?restaurant=${restaurant.id}`}>
-                      Accounts <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                      Accounts
+                      <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                   </Button>
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="icon-sm"
                     className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     onClick={() => {
                       setDeleteError(null)
                       setRestaurantToDelete(restaurant)
                     }}
+                    aria-label={`Delete ${restaurant.name}`}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -364,59 +385,75 @@ export function RestaurantsClient({
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {filteredRestaurants.map((restaurant) => (
-            <Card key={restaurant.id} className="flex flex-col transition-all hover:shadow-md">
+            <Card key={restaurant.id} className="stat-card flex flex-col">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base">{restaurant.name}</CardTitle>
-                    <p className="mt-1 font-mono text-xs text-muted-foreground">{restaurant.slug}</p>
+                    <CardTitle className="text-[15px] tracking-tight">{restaurant.name}</CardTitle>
+                    <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                      /{restaurant.slug}
+                    </p>
                   </div>
-                  <Badge variant={restaurant.is_open ? 'default' : 'secondary'} className="shrink-0">
+                  <Badge
+                    variant="outline"
+                    className={
+                      restaurant.is_open
+                        ? 'shrink-0 border-success/30 bg-success/10 text-success'
+                        : 'shrink-0 border-border bg-muted text-muted-foreground'
+                    }
+                  >
                     {restaurant.is_open ? 'Open' : 'Closed'}
                   </Badge>
                 </div>
               </CardHeader>
               <CardContent className="flex flex-1 flex-col gap-3 pt-0">
                 {restaurant.description && (
-                  <p className="line-clamp-2 text-sm text-muted-foreground">{restaurant.description}</p>
+                  <p className="line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
+                    {restaurant.description}
+                  </p>
                 )}
-                <div className="rounded-lg border px-3 py-2.5 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Crown className="h-3.5 w-3.5 text-warning" />
-                      <Label htmlFor={`kitchen-${restaurant.id}`} className="cursor-pointer text-xs">Kitchen Display</Label>
-                    </div>
-                    <Switch
-                      id={`kitchen-${restaurant.id}`}
-                      checked={restaurant.subscription_features?.kitchen === true}
-                      disabled={featureLoading === `${restaurant.id}:kitchen`}
-                      onCheckedChange={(checked) => handleToggleFeature(restaurant.id, 'kitchen', checked)}
-                    />
+                <div className="flex items-center justify-between rounded-md border border-border/80 bg-background px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <Crown className="h-3.5 w-3.5 text-warning" />
+                    <Label
+                      htmlFor={`kitchen-${restaurant.id}`}
+                      className="cursor-pointer text-[12px] font-medium"
+                    >
+                      Kitchen Display
+                    </Label>
                   </div>
+                  <Switch
+                    id={`kitchen-${restaurant.id}`}
+                    checked={restaurant.subscription_features?.kitchen === true}
+                    disabled={featureLoading === `${restaurant.id}:kitchen`}
+                    onCheckedChange={(checked) => handleToggleFeature(restaurant.id, 'kitchen', checked)}
+                  />
                 </div>
-                <div className="mt-auto space-y-2">
+                <div className="mt-auto space-y-1.5">
                   <Button asChild variant="outline" size="sm" className="w-full">
                     <Link href={`/${restaurant.slug}/cashier`}>
-                      <Settings className="mr-1.5 h-3.5 w-3.5" />
+                      <Settings className="h-3.5 w-3.5" />
                       Cashier Console
                     </Link>
                   </Button>
-                  <div className="flex gap-2">
-                    <Button asChild variant="ghost" size="sm" className="flex-1 text-muted-foreground">
+                  <div className="flex gap-1.5">
+                    <Button asChild variant="ghost" size="sm" className="flex-1">
                       <Link href={`/admin/restaurants/accounts?restaurant=${restaurant.id}`}>
-                        Accounts <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                        Accounts
+                        <ArrowRight className="h-3.5 w-3.5" />
                       </Link>
                     </Button>
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="icon-sm"
                       className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                       onClick={() => {
                         setDeleteError(null)
                         setRestaurantToDelete(restaurant)
                       }}
+                      aria-label={`Delete ${restaurant.name}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>

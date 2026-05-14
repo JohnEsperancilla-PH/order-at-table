@@ -118,7 +118,7 @@ export function CounterOrderForm({ open, onOpenChange, tables, menuItems, onOrde
   }, [])
 
   const setItemNotes = useCallback((lineId: string, notes: string) => {
-    setCart(prev => prev.map(ci => ci.lineId === lineId ? { ...ci, special_instructions: notes.trim() || undefined } : ci))
+    setCart(prev => prev.map(ci => ci.lineId === lineId ? { ...ci, special_instructions: notes } : ci))
   }, [])
 
   const removeFromCart = useCallback((lineId: string) => {

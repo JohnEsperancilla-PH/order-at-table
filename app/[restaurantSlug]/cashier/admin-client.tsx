@@ -10,18 +10,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
-import { Search, CheckCircle2, XCircle, Clock, Package, Eye, Inbox, Receipt, Filter, Loader2, RefreshCw } from 'lucide-react'
+import { Search, CheckCircle2, XCircle, Eye, Inbox, Receipt, Filter, Loader2 } from 'lucide-react'
 import { LiveIndicator } from '@/components/ui/live-indicator'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { PageHeader } from '@/components/ui/page-header'
 import { updateOrderStatus, getAllOrdersByRestaurantSlug, getOrdersByStatusAndRestaurantSlug, bulkUpdateOrderStatus, resendReceipt } from '@/lib/actions/orders'
-import { Order, OrderStatus } from '@/lib/types'
+import { Order, OrderStatus, Restaurant } from '@/lib/types'
 import { format } from 'date-fns'
 import { Label } from '@/components/ui/label'
-import { formatCurrency } from '@/lib/utils'
+import { cn, formatCurrency } from '@/lib/utils'
 import { CounterOrderForm } from './CounterOrderForm'
+import { printReceipt } from '@/lib/print-receipt'
 
 const CASHIER_KEYBOARD_MODE_KEY = 'cashier-controls-keyboard-mode'
 const CASHIER_BULK_OPTIONS_KEY = 'cashier-controls-bulk-options'
@@ -33,6 +33,7 @@ interface AdminDashboardClientProps {
   tables?: any[]
   menuItems?: any[]
   restaurantSlug: string
+  restaurant?: Pick<Restaurant, 'name' | 'contact_number' | 'description'> | null
 }
 
 type CashierOrder = Order & {
@@ -46,151 +47,180 @@ type CashierOrder = Order & {
 }
 
 // Memoized Order Card component
-const OrderCard = memo(function OrderCard({ 
-  order, 
-  enableBulkActions, 
-  isSelected, 
-  onToggleSelection, 
-  onResendReceipt, 
-  onDetails, 
-  onConfirmPayment, 
+const OrderCard = memo(function OrderCard({
+  order,
+  enableBulkActions,
+  isSelected,
+  onToggleSelection,
+  onResendReceipt,
+  onDetails,
+  onConfirmPayment,
   onUpdateStatus,
   onCancelRequest,
-  getStatusBadge
-}: { 
-  order: CashierOrder, 
-  enableBulkActions: boolean, 
-  isSelected: boolean, 
-  onToggleSelection: (id: string, checked: boolean) => void,
-  onResendReceipt: (id: string) => void,
-  onDetails: (order: CashierOrder) => void,
-  onConfirmPayment: (order: CashierOrder) => void,
-  onUpdateStatus: (id: string, status: OrderStatus) => void,
-  onCancelRequest: (id: string) => void,
-  getStatusBadge: (status: OrderStatus) => React.ReactNode
+}: {
+  order: CashierOrder
+  enableBulkActions: boolean
+  isSelected: boolean
+  onToggleSelection: (id: string, checked: boolean) => void
+  onResendReceipt: (id: string) => void
+  onDetails: (order: CashierOrder) => void
+  onConfirmPayment: (order: CashierOrder) => void
+  onUpdateStatus: (id: string, status: OrderStatus) => void
+  onCancelRequest: (id: string) => void
 }) {
+  const tableNumber = order.tables?.table_number || 'N/A'
+  const isTableOrder = !!order.customer_session_id
+  const receiptCount = order.receipt_resent_count || 0
+  const isAwaiting = order.status === 'awaiting_cashier_confirmation'
+
   return (
     <Card
-      className={`overflow-hidden transition-all duration-200 hover:shadow-md ${
-        order.status === 'awaiting_cashier_confirmation'
-          ? 'border-warning/40 bg-warning-muted/20'
-          : order.status === 'pending'
-            ? 'border-info/30'
-            : ''
-      }`}
+      className={cn(
+        'stat-card flex h-full flex-col overflow-hidden py-0',
+        isSelected && 'ring-2 ring-brand ring-offset-1 ring-offset-background',
+        isAwaiting && 'border-warning/50',
+        order.status === 'pending' && 'border-info/40',
+      )}
     >
-      <CardContent className="space-y-3 p-4">
-        <div className="flex items-center justify-between gap-2">
-          {enableBulkActions ? (
-            <Button
-              size="default"
-              variant={isSelected ? 'default' : 'outline'}
-              className="h-10 min-w-28"
-              onClick={() => onToggleSelection(order.id, !isSelected)}
-            >
-              {isSelected ? 'Selected' : 'Select'}
-            </Button>
-          ) : (
-            <span className="text-xs text-muted-foreground">Order Tools</span>
-          )}
-          <Button
-            size="default"
-            variant="ghost"
-            className="h-10 px-3"
-            onClick={() => onResendReceipt(order.id)}
-          >
-            <Receipt className="w-3.5 h-3.5 mr-1" />
-            Resend Receipt
-          </Button>
-        </div>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="font-mono text-xl font-bold tracking-wider">
+      <CardContent className="flex flex-1 flex-col gap-3 p-3.5">
+        {/* Header — code + status side by side; meta underneath */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="num font-mono text-[18px] font-bold leading-none tracking-[0.06em]">
               {order.confirmation_code}
             </p>
-            <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-              <span>Table {order.tables?.table_number || 'N/A'}</span>
-              <span className="text-muted-foreground/40">&middot;</span>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-muted-foreground">
+              <span className="font-medium text-foreground">Table {tableNumber}</span>
+              <span aria-hidden className="text-muted-foreground/50">·</span>
               <span>{format(new Date(order.created_at), 'MMM d, HH:mm')}</span>
             </div>
             {order.customer_name && (
-              <div className="mt-2 text-sm">
-                <span className="text-muted-foreground">Customer: </span>
+              <p className="mt-1 truncate text-[12px]">
+                <span className="text-muted-foreground">Customer </span>
                 <span className="font-medium text-foreground">{order.customer_name}</span>
-              </div>
+              </p>
             )}
           </div>
-          <div className="flex flex-col gap-2 items-end">
-            {getStatusBadge(order.status)}
-            <Badge variant={order.customer_session_id ? 'secondary' : 'outline'}>
-              {order.customer_session_id ? 'Table Order' : 'Counter Order'}
-            </Badge>
-            <Badge variant="outline">Receipts: {order.receipt_resent_count || 0}</Badge>
-          </div>
+          <StatusBadge status={order.status as OrderStatus} className="shrink-0" />
         </div>
-        <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
-          <span className="text-sm text-muted-foreground">{order.order_items?.length || '—'} items</span>
-          <span className="text-lg font-bold tabular-nums">
+
+        {/* Source / receipts as small chips */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span
+            className={cn(
+              'inline-flex items-center rounded-full border px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-[0.04em]',
+              isTableOrder
+                ? 'border-brand/30 bg-brand/10 text-brand'
+                : 'border-border bg-muted text-muted-foreground',
+            )}
+          >
+            {isTableOrder ? 'Table' : 'Counter'}
+          </span>
+          {receiptCount > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-[10.5px] font-medium text-muted-foreground">
+              <Receipt className="h-2.5 w-2.5" />
+              {receiptCount}
+            </span>
+          )}
+          {enableBulkActions && (
+            <button
+              type="button"
+              onClick={() => onToggleSelection(order.id, !isSelected)}
+              className={cn(
+                'ml-auto inline-flex items-center rounded-full border px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.04em] transition-colors',
+                isSelected
+                  ? 'border-brand/40 bg-brand text-brand-foreground'
+                  : 'border-border bg-background text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {isSelected ? 'Selected' : 'Select'}
+            </button>
+          )}
+        </div>
+
+        {/* Items + total */}
+        <div className="flex items-center justify-between rounded-md bg-secondary/60 px-3 py-2">
+          <span className="text-[12.5px] text-muted-foreground">
+            {order.order_items?.length || 0} {order.order_items?.length === 1 ? 'item' : 'items'}
+          </span>
+          <span className="num text-[15px] font-bold tracking-tight">
             {formatCurrency(order.total_amount)}
           </span>
         </div>
-        <div className="flex flex-wrap gap-2">
+
+        {/* Actions */}
+        <div className="mt-auto flex flex-wrap items-center gap-1.5">
           <Button
-            size="default"
+            size="sm"
             variant="ghost"
-            className="h-10 px-3"
+            className="h-8 px-2 text-[12.5px] text-muted-foreground hover:text-foreground"
             onClick={() => onDetails(order)}
           >
-            <Eye className="w-3.5 h-3.5 mr-1" />
+            <Eye className="h-3.5 w-3.5" />
             Details
           </Button>
-          {order.status === 'awaiting_cashier_confirmation' && (
-            <>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 px-2 text-[12.5px] text-muted-foreground hover:text-foreground"
+            onClick={() => onResendReceipt(order.id)}
+            title="Print receipt"
+            aria-label="Print receipt"
+          >
+            <Receipt className="h-3.5 w-3.5" />
+            Print
+          </Button>
+
+          <div className="ml-auto flex items-center gap-1.5">
+            {isAwaiting && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => onCancelRequest(order.id)}
+                  aria-label="Cancel order"
+                >
+                  <XCircle className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-8 px-3 text-[12.5px] font-semibold"
+                  onClick={() => onConfirmPayment(order)}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Confirm
+                </Button>
+              </>
+            )}
+            {order.status === 'confirmed' && (
               <Button
-                size="default"
-                className="h-10 px-4 text-sm flex-1"
-                onClick={() => onConfirmPayment(order)}
+                size="sm"
+                className="h-8 px-3 text-[12.5px] font-semibold"
+                onClick={() => onUpdateStatus(order.id, 'completed')}
               >
-                <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                Confirm Payment
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Complete
               </Button>
+            )}
+            {order.status === 'ready_for_pickup' && (
               <Button
-                size="default"
-                variant="outline"
-                className="h-10 px-3 text-sm text-destructive hover:text-destructive"
-                onClick={() => onCancelRequest(order.id)}
+                size="sm"
+                className="h-8 bg-warning px-3 text-[12.5px] font-semibold text-warning-foreground hover:bg-warning/90"
+                onClick={() => onUpdateStatus(order.id, 'completed')}
               >
-                <XCircle className="w-3.5 h-3.5" />
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Delivered
               </Button>
-            </>
-          )}
-          {order.status === 'confirmed' && (
-            <Button
-              size="default"
-              className="h-10 px-4 text-sm flex-1"
-              onClick={() => onUpdateStatus(order.id, 'completed')}
-            >
-              <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-              Mark Complete
-            </Button>
-          )}
-          {order.status === 'ready_for_pickup' && (
-            <Button
-              size="default"
-              className="h-10 px-4 text-sm flex-1 bg-warning text-warning-foreground hover:bg-warning/90"
-              onClick={() => onUpdateStatus(order.id, 'completed')}
-            >
-              <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-              Mark Delivered
-            </Button>
-          )}
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
   )
 })
 
-export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [], restaurantSlug }: AdminDashboardClientProps) {
+export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [], restaurantSlug, restaurant = null }: AdminDashboardClientProps) {
   const [isMounted, setIsMounted] = useState(false)
   const [orders, setOrders] = useState<CashierOrder[]>(initialOrders)
   const [searchCode, setSearchCode] = useState('')
@@ -461,13 +491,32 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
 
   const handleResendReceipt = useCallback(async (orderId: string) => {
     setStatusUpdateError(null)
-    try {
-      await resendReceipt(restaurantSlug, orderId)
-      await loadOrders(activeTab, true)
-    } catch (error: unknown) {
-      setStatusUpdateError(error instanceof Error ? error.message : 'Failed to resend receipt')
+    const order = ordersRef.current.find(o => o.id === orderId)
+    if (!order) {
+      setStatusUpdateError('Order not found')
+      return
     }
-  }, [restaurantSlug, activeTab, loadOrders])
+
+    // Open the system print dialog immediately so the user can target a Bluetooth /
+    // USB / AirPrint thermal printer that's been paired through the OS.
+    try {
+      printReceipt(order, restaurant)
+    } catch (error: unknown) {
+      setStatusUpdateError(error instanceof Error ? error.message : 'Failed to open print dialog')
+      return
+    }
+
+    // Bookkeeping: bump the reprint counter + audit log in the background.
+    // Don't surface failures here — the receipt has already been sent to the printer.
+    void (async () => {
+      try {
+        await resendReceipt(restaurantSlug, orderId)
+        await loadOrders(activeTab, true)
+      } catch {
+        // intentionally ignored — bookkeeping only
+      }
+    })()
+  }, [restaurantSlug, activeTab, loadOrders, restaurant])
 
   const openPaymentDialog = useCallback((order: CashierOrder) => {
     setPaymentOrder(order)
@@ -543,38 +592,6 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [keyboardMode, activeTab, loadOrders])
 
-  const getStatusBadge = useCallback((status: OrderStatus) => {
-    const variants: Record<OrderStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-      pending: 'outline',
-      awaiting_cashier_confirmation: 'secondary',
-      confirmed: 'default',
-      ready_for_pickup: 'outline', // We'll style this specially below
-      completed: 'default',
-      cancelled: 'destructive',
-    }
-
-    const icons: Record<OrderStatus, any> = {
-      pending: Clock,
-      awaiting_cashier_confirmation: Package,
-      confirmed: CheckCircle2,
-      ready_for_pickup: RefreshCw,
-      completed: CheckCircle2,
-      cancelled: XCircle,
-    }
-
-    const Icon = icons[status]
-
-    return (
-      <Badge 
-        variant={variants[status]} 
-        className={`flex items-center gap-1 ${status === 'ready_for_pickup' ? 'border-warning/50 text-warning-muted-foreground' : ''}`}
-      >
-        <Icon className={`w-3 h-3 ${status === 'ready_for_pickup' ? 'animate-pulse' : ''}`} />
-        {status.replace(/_/g, ' ').toUpperCase()}
-      </Badge>
-    )
-  }, [])
-
   if (!isMounted) {
     return (
       <div className="space-y-4">
@@ -592,7 +609,7 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
   }
 
   return (
-      <div className="space-y-4">
+      <div className="flex h-[calc(100dvh-6.5rem)] flex-col gap-3 md:h-[calc(100dvh-8rem)]">
         <PageHeader title="Orders" description="Manage orders and verify confirmation codes">
           <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
             <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground sm:justify-end">
@@ -618,9 +635,9 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
           </div>
         </PageHeader>
 
-      {/* Orders Table */}
-      <Card className="gap-2 py-3 sm:gap-2.5 sm:py-4">
-          <CardHeader className="space-y-0 px-4 pb-2 pt-2 sm:px-5">
+      {/* Orders Table — chrome stays put, only the grid scrolls */}
+      <Card className="flex min-h-0 flex-1 flex-col gap-2 py-3 sm:gap-2.5 sm:py-4">
+          <CardHeader className="shrink-0 space-y-0 px-4 pb-2 pt-2 sm:px-5">
             <div className="rounded-md border border-border/70 bg-muted/20 p-1.5 sm:p-2">
               <div className="flex flex-col gap-1.5 xl:flex-row xl:items-center xl:gap-2">
                 <div className="grid min-w-0 grid-cols-2 gap-1.5 sm:grid-cols-4 xl:flex-1">
@@ -736,9 +753,13 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
               )}
             </div>
           </CardHeader>
-          <CardContent className="px-4 pb-3 pt-0 sm:px-5">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-1.5">
-              <TabsList className="grid h-8 w-full grid-cols-3 text-xs sm:text-sm [&_[data-slot=tabs-trigger]]:py-0">
+          <CardContent className="flex min-h-0 flex-1 flex-col px-4 pb-3 pt-0 sm:px-5">
+            <Tabs
+              value={activeTab}
+              onValueChange={setActiveTab}
+              className="flex min-h-0 flex-1 flex-col gap-1.5"
+            >
+              <TabsList className="grid h-8 w-full shrink-0 grid-cols-3 text-xs sm:text-sm [&_[data-slot=tabs-trigger]]:py-0">
                 <TabsTrigger value="incoming">
                   Incoming
                   {incomingCount > 0 && (
@@ -751,7 +772,10 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                 <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
               </TabsList>
 
-              <TabsContent value={activeTab} className="mt-2">
+              <TabsContent
+                value={activeTab}
+                className="mt-2 flex min-h-0 flex-1 flex-col"
+              >
                 {activeTab === 'incoming' && enableBulkActions && (
                   <div className="mb-2 rounded-lg border bg-muted/20 p-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="text-xs font-medium text-muted-foreground sm:text-sm">
@@ -838,20 +862,20 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                   </Alert>
                 )}
                 {isLoading ? (
-                  <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
+                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
                     <Loader2 className="h-7 w-7 animate-spin text-muted-foreground/50" />
                     <p className="text-sm">Loading orders...</p>
                   </div>
                 ) : displayedOrders.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
+                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
                     <Inbox className="h-9 w-9 text-muted-foreground/30 sm:h-10 sm:w-10" />
                     <p className="text-sm">{searchResultId ? 'No matching order found' : 'No orders in this view'}</p>
                   </div>
                 ) : (
-                  <ScrollArea className="h-[calc(100dvh-18rem)] min-h-[260px] max-h-[65dvh] sm:min-h-[320px]">
+                  <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 pb-1">
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                       {displayedOrders.map((order) => (
-                        <OrderCard 
+                        <OrderCard
                           key={order.id}
                           order={order}
                           enableBulkActions={enableBulkActions}
@@ -862,11 +886,10 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                           onConfirmPayment={openPaymentDialog}
                           onUpdateStatus={handleUpdateStatus}
                           onCancelRequest={setCancelOrderId}
-                          getStatusBadge={getStatusBadge}
                         />
                       ))}
                     </div>
-                  </ScrollArea>
+                  </div>
                 )}
               </TabsContent>
             </Tabs>
@@ -975,13 +998,23 @@ export function AdminDashboardClient({ initialOrders, tables = [], menuItems = [
                 </div>
               </div>
 
-              <Button
-                variant="outline"
-                onClick={() => setSelectedOrder(null)}
-                className="w-full"
-              >
-                Close
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => selectedOrder && handleResendReceipt(selectedOrder.id)}
+                  className="flex-1"
+                >
+                  <Receipt className="h-4 w-4" />
+                  Print Receipt
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedOrder(null)}
+                  className="flex-1"
+                >
+                  Close
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
